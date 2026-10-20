@@ -16,7 +16,8 @@ public static class VgmstreamCli
     private static readonly string ExecutableName = OperatingSystem.IsWindows() ? "vgmstream-cli.exe" : "vgmstream-cli";
 
     // Before the game folder held it (USRDIR/waddamburo/cache/vgmstream): the user cache folder.
-    private static readonly string UserCache = Path.Combine(OperatingSystem.IsWindows()
+    private static readonly string UserCache = AppContext.TryGetSwitch("Waddamburo.Prospero", out var prospero) && prospero
+        ? "/data/Waddamburo/cache/vgmstream" : Path.Combine(OperatingSystem.IsWindows()
         ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
         : Environment.GetEnvironmentVariable("XDG_CACHE_HOME") is { Length: > 0 } xdg ? xdg
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache"),

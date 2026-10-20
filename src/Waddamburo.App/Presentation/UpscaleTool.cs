@@ -92,7 +92,8 @@ internal sealed class UpscaleTool : IDisposable
             Console.Error.WriteLine("Texture upscaling off: the waddamburo_texture library (BC7) is missing.");
             return null;
         }
-        var userCache = Path.Combine(OperatingSystem.IsWindows()
+        var userCache = AppContext.TryGetSwitch("Waddamburo.Prospero", out var prospero) && prospero
+            ? "/data/Waddamburo/cache/upscaled" : Path.Combine(OperatingSystem.IsWindows()
             ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
             : Environment.GetEnvironmentVariable("XDG_CACHE_HOME") is { Length: > 0 } xdg ? xdg
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache"),

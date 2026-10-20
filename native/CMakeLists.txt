@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(WaddamburoNative LANGUAGES C CXX)
+option(WADDAMBURO_PROSPERO "Static PS5 homebrew native engine" OFF)
+set(WADDAMBURO_NATIVE_LIBRARY_TYPE SHARED)
+if(WADDAMBURO_PROSPERO)
+  set(WADDAMBURO_NATIVE_LIBRARY_TYPE STATIC)
+endif()
 
 set(_waddamburo_build_types Debug Release Sanitize)
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${_waddamburo_build_types})
@@ -61,7 +66,9 @@ if(WADDAMBURO_PACKAGE)
   set(WADDAMBURO_MEDIA_FFMPEG ON)
   set(WADDAMBURO_MEDIA_VGMSTREAM ON)
   set(WADDAMBURO_BUILD_TEXT ON)
-  set(WADDAMBURO_BUILD_BGFX ON)
+  if(NOT WADDAMBURO_PROSPERO)
+    set(WADDAMBURO_BUILD_BGFX ON)
+  endif()
 endif()
 
 option(WADDAMBURO_BUILD_FFMPEG "Enable the pinned minimal FFmpeg dependency target" OFF)
@@ -102,4 +109,8 @@ if(BUILD_TESTING)
     $<$<CONFIG:Release>:WADDAMBURO_BUILD_RELEASE=1>
     $<$<CONFIG:Sanitize>:WADDAMBURO_BUILD_SANITIZE=1>)
   add_test(NAME native_build_policy COMMAND waddamburo_native_build_policy_test)
+endif()
+
+if(WADDAMBURO_PROSPERO)
+  add_subdirectory(prospero)
 endif()

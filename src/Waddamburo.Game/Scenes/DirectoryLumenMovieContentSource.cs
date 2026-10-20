@@ -23,6 +23,14 @@ public sealed class DirectoryLumenMovieContentSource : IScopedLumenMovieContentS
     }
 
     private ConcurrentDictionary<(string ArchiveId, string MovieId), Task<LumenMovieContent>> _prefetched = new();
+    private readonly SemaphoreSlim _consoleDecodeGate = new(1, 1);
+    private CancellationTokenSource? _consolePrefetchCancellation;
+    private readonly ConcurrentDictionary<LumenMovieContent, SemaphoreSlim> _pendingUploads = new(ReferenceEqualityComparer.Instance);
+
+    public void NotifyUploaded(LumenMovieContent content)
+    {
+        if (_pendingUploads.TryRemove(content, out var slots)) slots.Release();
+    }
 
     public ILumenMovieContentScope CreateSceneScope() => new SceneScope(this);
 
@@ -47,6 +55,11 @@ public sealed class DirectoryLumenMovieContentSource : IScopedLumenMovieContentS
     /// </summary>
     public void Prefetch(IEnumerable<(string ArchiveId, string MovieId)> movies)
     {
+        if (AppContext.TryGetSwitch("Waddamburo.Prospero", out var console) && console)
+        {
+            PrefetchConsole(movies);
+            return;
+        }
         var fresh = new ConcurrentDictionary<(string ArchiveId, string MovieId), Task<LumenMovieContent>>();
         foreach (var archive in movies.Distinct().GroupBy(static movie => movie.ArchiveId))
         {
@@ -57,6 +70,51 @@ public sealed class DirectoryLumenMovieContentSource : IScopedLumenMovieContentS
                     CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
         }
         _prefetched = fresh;
+    }
+
+    // Bound both archive reads and texture decoding. The desktop burst schedules
+    // every movie together; gameplay can expand dozens of compressed texture sets
+    // into large RGBA arrays before the render thread can upload and release them.
+    private void PrefetchConsole(IEnumerable<(string ArchiveId, string MovieId)> movies)
+    {
+        _consolePrefetchCancellation?.Cancel();
+        var generation = new CancellationTokenSource();
+        _consolePrefetchCancellation = generation;
+        var token = generation.Token;
+        _pendingUploads.Clear();
+        var uploadSlots = new SemaphoreSlim(2, 2);
+        var fresh = new ConcurrentDictionary<(string ArchiveId, string MovieId), Task<LumenMovieContent>>();
+        foreach (var archive in movies.Distinct().GroupBy(static movie => movie.ArchiveId))
+        {
+            var path = resolveArchivePath(archive.Key);
+            var opened = new Lazy<DdpArchive>(() => DdpArchive.Open(File.ReadAllBytes(path), _limits));
+            foreach (var movie in archive)
+            {
+                fresh[movie] = Task.Run(async () =>
+                {
+                    await uploadSlots.WaitAsync(token).ConfigureAwait(false);
+                    bool published = false;
+                    try
+                    {
+                        await _consoleDecodeGate.WaitAsync(token).ConfigureAwait(false);
+                        try
+                        {
+                            token.ThrowIfCancellationRequested();
+                            var content = decoded(archive.Key, LumenMovieContent.Load(opened.Value.OpenMovie(movie.MovieId), _limits));
+                            token.ThrowIfCancellationRequested();
+                            _pendingUploads[content] = uploadSlots;
+                            published = true;
+                            Console.WriteLine($"PS5 decoded: {movie.MovieId}; ready for upload.");
+                            return content;
+                        }
+                        finally { _consoleDecodeGate.Release(); }
+                    }
+                    finally { if (!published) uploadSlots.Release(); }
+                }, token);
+            }
+        }
+        _prefetched = fresh;
+        Console.WriteLine($"PS5 prefetch: {fresh.Count} movies queued, one archive/decode job at a time.");
     }
 
     /// <summary>Every prefetched movie not yet taken is decoded (or failed, which its load reports).</summary>
@@ -71,7 +129,10 @@ public sealed class DirectoryLumenMovieContentSource : IScopedLumenMovieContentS
     {
         foreach (var (key, task) in _prefetched)
             if (task.IsCompletedSuccessfully && contents.Contains(task.Result))
+            {
+                NotifyUploaded(task.Result);
                 _prefetched.TryRemove(key, out _);
+            }
     }
 
     public async ValueTask<LumenMovieContent> LoadAsync(
@@ -96,7 +157,12 @@ public sealed class DirectoryLumenMovieContentSource : IScopedLumenMovieContentS
             ArgumentException.ThrowIfNullOrWhiteSpace(movieId);
             cancellationToken.ThrowIfCancellationRequested();
             owner.Loaded?.Invoke(archiveId, movieId);
-            if (owner._prefetched.TryRemove((archiveId, movieId), out var ready))
+            Task<LumenMovieContent>? ready;
+            bool console = AppContext.TryGetSwitch("Waddamburo.Prospero", out var enabled) && enabled;
+            // Keep console results visible to GPU upload while the scene loader waits
+            // for subsequent movies. Activate forgets these once their textures are taken.
+            if (console ? owner._prefetched.TryGetValue((archiveId, movieId), out ready)
+                        : owner._prefetched.TryRemove((archiveId, movieId), out ready))
             {
                 try
                 {

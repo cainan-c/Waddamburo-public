@@ -421,7 +421,8 @@ public sealed record ArcadeSettings
     public static bool IsGameCache(string? value) => string.Equals(value, GameCacheValue, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The running user's cache folder on this PC: %LOCALAPPDATA%\Waddamburo, or $XDG_CACHE_HOME (~/.cache)/Waddamburo.</summary>
-    public static string UserCacheFolder => Path.Combine(OperatingSystem.IsWindows()
+    public static string UserCacheFolder => AppContext.TryGetSwitch("Waddamburo.Prospero", out var prospero) && prospero
+        ? "/data/Waddamburo/cache" : Path.Combine(OperatingSystem.IsWindows()
         ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
         : Environment.GetEnvironmentVariable("XDG_CACHE_HOME") is { Length: > 0 } xdg ? xdg
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache"),

@@ -126,7 +126,7 @@ internal sealed class HomePauseOverlay : IDisposable
     private void settings(List<RenderQuad> quads, HomeMenu menu)
     {
         var items = menu.Items;
-        var first = Math.Clamp(menu.Selection - VisibleRows / 2, 0, Math.Max(0, items.Length - VisibleRows));
+        var first = menu.FirstVisibleRow(VisibleRows);
         for (var row = 0; row < Math.Min(VisibleRows, items.Length); row++)
         {
             var index = first + row;

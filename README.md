@@ -28,6 +28,36 @@ per platform.
 - Affiliated with Bandai Namco (see [Legal](#legal)).
 - Finished. Some things are still missing or approximate; bug reports are welcome.
 
+## PS5 homebrew (Prospero branch)
+
+The `prospero` branch includes an experimental native PS5 port, tested on firmware
+**11.60**. It uses **SharpProspero** (.NET NativeAOT), the public **PS5 Payload SDK**,
+and **[PS5_Vulkan](https://github.com/mihawk-99/PS5_Vulkan)** with the PS5 Mesa/RADV
+driver. The console backend uses PS5 controller, display and audio services directly
+and does not link SDL. Desktop builds retain their SDL backend.
+
+Build from this branch on Windows with **PowerShell 7**, **Git** and **WSL 2**:
+
+```powershell
+git switch prospero
+./eng/prospero/setup.ps1 -InstallDotNet -InstallLinux
+./eng/prospero/build.ps1 -Output Folder
+```
+
+Setup downloads the pinned open-source toolchains and installs **.NET SDK
+10.0.201** and Linux build tools. The output is `out/prospero-game/module`, ready
+for your PS5 homebrew FPKG packaging workflow after adding your own assets.
+Copy the **contents of `USRDIR/data`** into `module/Data`, beside `eboot.bin`.
+Configuration, scores and caches are saved separately on the console SSD in
+`/data/Waddamburo`.
+
+The console settings offer **60 or 120 FPS** with VSync enabled. Selecting 120 FPS
+requests 120 Hz output when supported by the display. See the
+[PS5 guide](README.PS5.md) for controls, asset layout, limitations and checks, and
+the [PS5 build reference](docs/development/prospero.md) for toolchain versions and
+build details. The remaining getting-started instructions on this page describe
+the desktop build.
+
 ## Getting started
 
 1. Get the latest `Waddamburo.exe` (Windows x64) or `Waddamburo-x86_64.AppImage`

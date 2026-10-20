@@ -110,7 +110,11 @@ internal sealed class HomeMenu(Func<ArcadeSettings> get, Action<ArcadeSettings> 
         [.. DisplayModes.Where(m => (m.Width, m.Height) == (s.FullscreenWidth, s.FullscreenHeight))
             .Select(static m => m.RefreshRate).Distinct().OrderDescending()];
 
+#if WADDAMBURO_PROSPERO
+    private static readonly int[] FpsCaps = [60, 120];
+#else
     private static readonly int[] FpsCaps = [0, 60, 120, 144, 165, 240, 360, 480, 1000];
+#endif
 
     /// <summary>The gameplay skins in the player's data, by name (set once by the host).</summary>
     public static IReadOnlyList<string> Skins { get; set; } = [];
@@ -192,6 +196,7 @@ internal sealed class HomeMenu(Func<ArcadeSettings> get, Action<ArcadeSettings> 
         new(Setting: new(T("settings.audio_buffer"), static s => s.AudioBufferFrames, static (s, v) => s with { AudioBufferFrames = v },
             static (value, step) => step > 0 ? value * 2 : value / 2, 64,
             static value => T("settings.audio_buffer.value", value), 2048, Hint: T("settings.audio_buffer.hint"))),
+#if !WADDAMBURO_PROSPERO
         new(Setting: toggle("settings.exclusive_audio", static s => s.AudioExclusive, static (s, v) => s with { AudioExclusive = v })),
         new(T("section.display")),
         new(Setting: new(T("settings.fullscreen"), static s => !s.Fullscreen ? 0 : exclusive(s) ? 2 : 1,
@@ -217,12 +222,16 @@ internal sealed class HomeMenu(Func<ArcadeSettings> get, Action<ArcadeSettings> 
             FormatFor = static s => s.RefreshRate == 0 ? T("settings.refresh_rate.highest") : T("settings.refresh_rate.value", s.RefreshRate),
         }),
         new(Setting: toggle("settings.vsync", static s => s.Vsync, static (s, v) => s with { Vsync = v })),
+#endif
+#if !WADDAMBURO_PROSPERO
         new(Shown: static s => !exclusive(s), Setting: new(T("settings.frame_limit"),
             static s => Math.Max(0, Array.IndexOf(FpsCaps, s.FpsCap)),
             static (s, v) => s with { FpsCap = FpsCaps[Math.Min(v, FpsCaps.Length - 1)] },
             static (value, step) => value + Math.Sign(step), 0,
             static value => value == 0 ? T("value.off") : T("settings.frame_limit.value", FpsCaps[value]), FpsCaps.Length - 1,
             Hint: T("settings.frame_limit.hint"))),
+#endif
+#if !WADDAMBURO_PROSPERO
         new(Setting: new(T("settings.letterbox_size"), static s => s.LetterboxSize, static (s, v) => s with { LetterboxSize = v },
             static (value, step) => value + step, 20, static value => value == 100 ? T("value.off") : T("value.percent", value), 100,
             Hint: T("settings.letterbox_size.hint"))),
@@ -232,7 +241,15 @@ internal sealed class HomeMenu(Func<ArcadeSettings> get, Action<ArcadeSettings> 
         new(Shown: static s => s.LetterboxSize < 100, Setting: new(T("settings.letterbox_y"), static s => s.LetterboxY,
             static (s, v) => s with { LetterboxY = v }, static (value, step) => value + step, 0, static value => T("value.percent", value), 100,
             Hint: T("settings.letterbox_y.hint"))),
+#endif
         new(T("section.graphics")),
+#if WADDAMBURO_PROSPERO
+        new(Setting: new(T("settings.frame_limit"),
+            static s => Math.Max(0, Array.IndexOf(FpsCaps, s.FpsCap)),
+            static (s, v) => s with { FpsCap = FpsCaps[Math.Min(v, FpsCaps.Length - 1)] },
+            static (value, step) => value + Math.Sign(step), 0,
+            static value => T("settings.frame_limit.value", FpsCaps[value]), FpsCaps.Length - 1)),
+#endif
         new(Setting: toggle("settings.upscaled_textures", static s => s.UpscaleTextures, static (s, v) => s with { UpscaleTextures = v })),
         new(Setting: new(T("settings.background_upscaling"), static s => s.UpscaleThreads, static (s, v) => s with { UpscaleThreads = v },
             static (value, step) => value + Math.Sign(step), 0,
@@ -252,7 +269,8 @@ internal sealed class HomeMenu(Func<ArcadeSettings> get, Action<ArcadeSettings> 
     // A pad takes two keyboard keys at most (controllers and MIDI: any number).
     private const int MaximumKeys = 2;
     private bool _controlsPage;
-    private int _player, _device;
+    private int _player;
+    private int _device = AppContext.TryGetSwitch("Waddamburo.Prospero", out var console) && console ? 1 : 0;
     // Pads still to ask for in Set Up All Pads, the selected one included; 0: one pad was picked.
     private int _guided;
     private Row[]? _controlRows;
@@ -428,6 +446,23 @@ internal sealed class HomeMenu(Func<ArcadeSettings> get, Action<ArcadeSettings> 
 
     public Item[] Items => [.. rows.Select(item)];
 
+    // Keep each settings page's viewport anchored while navigating. Re-centering
+    // on every move made skipping a section heading move the entire list twice.
+    private readonly int[] _firstVisibleRows = new int[4];
+
+    public int FirstVisibleRow(int visibleRows)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(visibleRows);
+        var page = _guidePage ? 3 : _buttonsPage ? 2 : _controlsPage ? 1 : 0;
+        ref var first = ref _firstVisibleRows[page];
+        first = Math.Clamp(first, 0, Math.Max(0, rows.Length - visibleRows));
+        if (Selection < first)
+            first = Selection;
+        else if (Selection >= first + visibleRows)
+            first = Selection - visibleRows + 1;
+        return first;
+    }
+
     // The rows shown for the current settings; Selection indexes these. Only rows below the one being
     // changed come and go, so the selection stays on it.
     private Row[] rows => [.. (_guidePage ? guideRows : _buttonsPage ? buttonRows : _controlsPage ? controlRows : Rows_).Where(row => (row.Shown?.Invoke(get()) ?? true)
@@ -528,7 +563,11 @@ internal sealed class HomeMenu(Func<ArcadeSettings> get, Action<ArcadeSettings> 
     // The player's pads get their default inputs of this device back (taken from wherever they are now).
     private void resetControls()
     {
+#if WADDAMBURO_PROSPERO
+        var defaults = Waddamburo.Platform.Prospero.ProsperoControls.Apply(new ArcadeSettings()).Controls;
+#else
         var defaults = new ArcadeSettings().Controls;
+#endif
         var controls = get().Controls;
         var restored = Enumerable.Range(_player * 4, 4).SelectMany(pad => inputs(defaults[pad]).Where(onDevice)).ToHashSet();
         for (var pad = 0; pad < controls.Count; pad++)
@@ -635,6 +674,7 @@ internal sealed class HomeMenu(Func<ArcadeSettings> get, Action<ArcadeSettings> 
                 : ["menu.resume", restart, "menu.settings", "menu.song_select"]
             : attract ? ["menu.resume", "menu.settings"] : ["menu.resume", "menu.settings", "menu.return_to_title"];
         IsOpen = true;
+        Array.Clear(_firstVisibleRows);
         Selection = 0;
         _settingsPage = _editing = _restartPrompt = _listening = _controlsPage = _guidePage = _buttonsPage = false;
         input.CancelCapture();
@@ -710,6 +750,7 @@ internal sealed class HomeMenu(Func<ArcadeSettings> get, Action<ArcadeSettings> 
                 switch (_choices[Selection])
                 {
                     case "menu.settings":
+                        _firstVisibleRows[0] = 0;
                         _settingsPage = true;
                         Selection = move(0, 1);
                         break;

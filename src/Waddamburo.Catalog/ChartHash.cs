@@ -12,8 +12,22 @@ public static class ChartHash
     /// <summary>Bump when the serialization changes; every chart then gets a new identity.</summary>
     public const byte FormatVersion = 1;
 
-    public static string Compute(PlayableChart chart, TaikoCourse course) =>
-        Convert.ToHexStringLower(SHA256.HashData(Serialize(chart, course)));
+    private static Func<byte[], byte[]> _sha256 = static bytes => SHA256.HashData(bytes);
+
+    /// <summary>Choose the platform's SHA-256 implementation before starting catalog workers.</summary>
+    public static void SetSha256Provider(Func<byte[], byte[]> provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        Volatile.Write(ref _sha256, provider);
+    }
+
+    public static string Compute(PlayableChart chart, TaikoCourse course)
+    {
+        var digest = Volatile.Read(ref _sha256)(Serialize(chart, course));
+        if (digest.Length != 32)
+            throw new InvalidOperationException("The SHA-256 provider must return a 32-byte digest.");
+        return Convert.ToHexStringLower(digest);
+    }
 
     /// <summary>Little-endian; times in whole microseconds so float noise below that cannot split charts.</summary>
     public static byte[] Serialize(PlayableChart chart, TaikoCourse course)

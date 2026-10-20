@@ -1,0 +1,7 @@
+if(NOT DEFINED ENV{PS5_PAYLOAD_SDK})
+  message(FATAL_ERROR "Set PS5_PAYLOAD_SDK to the pinned PS5_Vulkan native SDK")
+endif()
+set(PS5_PAYLOAD_SDK "$ENV{PS5_PAYLOAD_SDK}" CACHE PATH "")
+include("${PS5_PAYLOAD_SDK}/toolchain/prospero.cmake")
+set(CMAKE_C_FLAGS_INIT "-ffunction-sections -fdata-sections -march=znver2")
+set(CMAKE_CXX_FLAGS_INIT "-ffunction-sections -fdata-sections -march=znver2 -fno-exceptions -fno-rtti")

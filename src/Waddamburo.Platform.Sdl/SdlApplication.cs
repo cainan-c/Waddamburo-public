@@ -57,6 +57,12 @@ public sealed unsafe class SdlApplication : IDisposable
             var windowFlags = highPixelDensity
                 ? SDL_WindowFlags.SDL_WINDOW_HIGH_PIXEL_DENSITY
                 : 0;
+            if (SDL_GetCurrentVideoDriver() == "ps5")
+            {
+                windowFlags |= SDL_WindowFlags.SDL_WINDOW_VULKAN;
+                var output = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+                if (output is not null) { width = output->w; height = output->h; }
+            }
             if (resizable)
                 windowFlags |= SDL_WindowFlags.SDL_WINDOW_RESIZABLE;
             if (fullscreen)

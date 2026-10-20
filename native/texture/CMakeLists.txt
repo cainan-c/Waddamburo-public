@@ -14,7 +14,7 @@ if(NOT MSVC)
   target_compile_options(waddamburo_bc7enc PRIVATE -w -O3)
 endif()
 
-add_library(waddamburo_texture SHARED src/texture.cpp $<TARGET_OBJECTS:waddamburo_bc7enc>)
+add_library(waddamburo_texture ${WADDAMBURO_NATIVE_LIBRARY_TYPE} src/texture.cpp $<TARGET_OBJECTS:waddamburo_bc7enc>)
 add_library(Waddamburo::Texture ALIAS waddamburo_texture)
 waddamburo_configure_native_target(waddamburo_texture)
 if(MINGW)

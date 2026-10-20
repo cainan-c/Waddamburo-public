@@ -1,4 +1,4 @@
-add_library(waddamburo_text SHARED src/text.c)
+add_library(waddamburo_text ${WADDAMBURO_NATIVE_LIBRARY_TYPE} src/text.c)
 add_library(Waddamburo::Text ALIAS waddamburo_text)
 
 waddamburo_configure_native_target(waddamburo_text)
@@ -26,4 +26,8 @@ if(BUILD_TESTING)
   waddamburo_configure_native_target(waddamburo_text_abi_test)
   target_link_libraries(waddamburo_text_abi_test PRIVATE Waddamburo::Text)
   add_test(NAME text_abi COMMAND waddamburo_text_abi_test)
+endif()
+
+if(WADDAMBURO_PROSPERO)
+  target_compile_definitions(waddamburo_text PRIVATE WADDAMBURO_TEXT_MEMORY_FONTS=1)
 endif()
