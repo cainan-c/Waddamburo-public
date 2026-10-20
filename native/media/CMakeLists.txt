@@ -1,4 +1,4 @@
-add_library(waddamburo_media SHARED src/media.c src/video.c src/transcode.c)
+add_library(waddamburo_media ${WADDAMBURO_NATIVE_LIBRARY_TYPE} src/media.c src/video.c src/transcode.c)
 add_library(Waddamburo::Media ALIAS waddamburo_media)
 
 waddamburo_configure_native_target(waddamburo_media)

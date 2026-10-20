@@ -75,3 +75,16 @@ exact dependency versions. Release packages must include those authoritative tex
 Waddamburo never builds, downloads, or ships G.719 code. Running a user-supplied
 vgmstream-cli is the user's own use of that program, not a representation that it
 grants any particular patent, copyright, or redistribution rights.
+
+## PS5 homebrew target
+
+The PS5 target uses SharpProspero, the mihawk-99 PS5 Payload SDK fork,
+PS5_Vulkan and PS5_Mesa in addition to the native engine dependencies above.
+Repository links, exact pinned revisions and build roles are listed in the
+[PS5 toolchain reference](docs/development/prospero.md#pinned-public-sdks).
+These toolchains and their dependencies retain their own upstream licenses;
+the Waddamburo MIT license does not replace them. Source checkouts are fetched
+into the ignored `.deps/prospero` tree rather than vendored in this repository.
+The PS5 native libraries, including FFmpeg and bgfx, are linked statically;
+retain the applicable notices and corresponding-source/relinking materials
+when distributing console binaries. The PS5 backend does not ship SDL.

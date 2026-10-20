@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/Waddamburo.Platform.Prospero.Native/Waddamburo.Platform.Prospero.Native.csproj" />
+  <Project Path="src/Waddamburo.App.Prospero/Waddamburo.App.Prospero.csproj" />
+  <Project Path="src/Waddamburo.Platform.Prospero/Waddamburo.Platform.Prospero.csproj" />
+  <Project Path="tests/Waddamburo.Prospero.Checks/Waddamburo.Prospero.Checks.csproj" />
+</Solution>

@@ -228,7 +228,9 @@ namespace Waddamburo.Platform.Sdl.Rendering
         private static void fillWindow(SDL_Window* window, bgfx.Init* init)
         {
             var properties = SDL_GetWindowProperties(window);
-            if (OperatingSystem.IsWindows())
+            if (SDL_GetCurrentVideoDriver() == "ps5")
+                init->swapChain.nwh = window; // The native PS5 Vulkan bridge takes the SDL window itself.
+            else if (OperatingSystem.IsWindows())
                 init->swapChain.nwh = (void*)SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_WIN32_HWND_POINTER, IntPtr.Zero);
             else if (OperatingSystem.IsMacOS())
                 init->swapChain.nwh = (void*)SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, IntPtr.Zero);

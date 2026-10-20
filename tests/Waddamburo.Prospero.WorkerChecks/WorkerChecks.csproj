@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><PublishAot>true</PublishAot></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Waddamburo.Platform.Prospero/ProsperoThreadPool.cs" />
+    <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.MinThreads" Value="8" />
+    <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.MaxThreads" Value="8" />
+    <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.ThreadsToKeepAlive" Value="-1" />
+  </ItemGroup>
+</Project>

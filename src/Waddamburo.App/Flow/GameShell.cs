@@ -245,6 +245,7 @@ internal sealed class GameShell : IDisposable
 
     public static int Run(GameOptions options)
     {
+        RestartRequested = false;
         using var shell = new GameShell(options);
         return shell.run();
     }
@@ -506,8 +507,6 @@ internal sealed class GameShell : IDisposable
         Coordinator.StartAsync(initialScene).AsTask().GetAwaiter().GetResult();
         try
         {
-            activate();
-            Console.WriteLine($"Showing {Active.Id} at launch.");
             _indicators = new SystemIndicators((LumenGameSceneInstance)_loader
                 .LoadAsync(SystemIndicators.Definition(new SceneId("system-indicators")), CancellationToken.None)
                 .AsTask().GetAwaiter().GetResult()) { Coins = Coins };
@@ -530,6 +529,8 @@ internal sealed class GameShell : IDisposable
                     _indicators.EntryJoined();
             };
             _indicatorTextures = SceneTextures.Upload(Application, _indicators.Scene);
+            activate();
+            Console.WriteLine($"Showing {Active.Id} at launch.");
 
             var result = Application.Run(
                 createFrame,
@@ -649,7 +650,7 @@ internal sealed class GameShell : IDisposable
     private void applyPendingTransition()
     {
         ReportDiagnostics();
-        switchScene(() => Coordinator.ApplyPendingTransitionAsync().AsTask().GetAwaiter().GetResult());
+        switchScene(() => Coordinator.ApplyPendingTransitionAsync().AsTask());
         Console.WriteLine($"Activated scene '{Active.Id}' at tick {Tick}.");
     }
 
@@ -734,13 +735,13 @@ internal sealed class GameShell : IDisposable
     /// <summary>Leaves the active scene and shows <paramref name="scene"/> (loaded fresh from the catalog).</summary>
     public void Show(SceneId scene)
     {
-        switchScene(() => Coordinator.TransitionToAsync(scene).AsTask().GetAwaiter().GetResult());
+        switchScene(() => Coordinator.TransitionToAsync(scene).AsTask());
         Console.WriteLine($"Showing {scene} at tick {Tick}.");
     }
 
     private long _liveAfterCollect;
 
-    private void switchScene(Action transition)
+    private void switchScene(Func<Task> transition)
     {
         var profile = Environment.GetEnvironmentVariable("WADDAMBURO_PROFILE") == "1";
         var from = Active.Id;
@@ -754,7 +755,18 @@ internal sealed class GameShell : IDisposable
         _presenter.Switching = true;
         try
         {
-            transition();
+            var loading = transition();
+            if (AppContext.TryGetSwitch("Waddamburo.Prospero", out var console) && console)
+            {
+                // Scene loading awaits bounded prefetch jobs. Keep the main-thread
+                // GPU uploads draining even while the normal frame loop is paused.
+                while (!loading.IsCompleted)
+                {
+                    _presenter.UploadAhead();
+                    Thread.Sleep(1);
+                }
+            }
+            loading.GetAwaiter().GetResult();
         }
         finally
         {
@@ -770,7 +782,8 @@ internal sealed class GameShell : IDisposable
         // avoids blocking full collections of its own.
         // ponytail: 128 MiB grown since the last clean-up (garbage and all); tune if RSS creeps.
         var collect = Stopwatch.GetTimestamp();
-        System.Runtime.GCSettings.LatencyMode = onLane
+        bool consoleGc = AppContext.TryGetSwitch("Waddamburo.Prospero", out var consoleEnabled) && consoleEnabled;
+        System.Runtime.GCSettings.LatencyMode = consoleGc ? System.Runtime.GCLatencyMode.Batch : onLane
             ? System.Runtime.GCLatencyMode.SustainedLowLatency
             : System.Runtime.GCLatencyMode.Interactive;
         if ((!onLane || _home.Covering) && GC.GetTotalMemory(false) - _liveAfterCollect > 128L << 20)
@@ -782,7 +795,7 @@ internal sealed class GameShell : IDisposable
         // Into a lane under the rainbow: a background collection instead (a few ms of pauses), which frees
         // Song Select's leftovers (the gameplay prefetch's decoded pixels, ~500 MiB) early in the song.
         else if (onLane)
-            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: false);
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: consoleGc);
         Application.DiscardElapsed();
         if (profile)
         {
@@ -997,6 +1010,8 @@ internal sealed class GameShell : IDisposable
     private RenderFrame createFrame(double interpolationFraction)
     {
         var interpolation = _home.Interpolation(interpolationFraction);
+        bool console = AppContext.TryGetSwitch("Waddamburo.Prospero", out var enabled) && enabled;
+        if (console) _presenter.UploadAhead();
         if (_presenter.Held(Tick) is { } held)
         {
             _home.HoldBlack();
@@ -1007,7 +1022,7 @@ internal sealed class GameShell : IDisposable
                 : held.Frame);
         }
         Titles.UploadCompleted();
-        _presenter.UploadAhead();
+        if (!console) _presenter.UploadAhead();
         if (SceneTextures.Upscaler is { } upscaler)
         {
             upscaler.Paused = onLane || Bake?.Running == true;

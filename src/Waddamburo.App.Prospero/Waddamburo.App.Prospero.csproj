@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <SharpProsperoRoot Condition="'$(SharpProsperoRoot)' == ''">$(SHARPPROSPERO_ROOT)</SharpProsperoRoot>
+    <SharpProsperoRoot Condition="'$(SharpProsperoRoot)' == ''">$(MSBuildThisFileDirectory)../../.deps/prospero/SharpProspero</SharpProsperoRoot>
+    <ProsperoHeapHardLimitBytes>1073741824</ProsperoHeapHardLimitBytes>
+    <ProsperoHeapRegionRangeBytes>1610612736</ProsperoHeapRegionRangeBytes>
+    <ProsperoThreadStackBytes>2097152</ProsperoThreadStackBytes>
+  </PropertyGroup>
+  <Import Project="$(SharpProsperoRoot)/build/Prospero.App.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Waddamburo.App</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>$(DefineConstants);WADDAMBURO_PROSPERO</DefineConstants>
+    <ProsperoModuleName>eboot.bin</ProsperoModuleName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Waddamburo.App/**/*.cs" Exclude="../Waddamburo.App/obj/**;../Waddamburo.App/bin/**;../Waddamburo.App/Program.cs" />
+    <ProjectReference Include="../Waddamburo.Platform.Prospero/Waddamburo.Platform.Prospero.csproj" />
+    <ProjectReference Include="../Waddamburo.Platform.Prospero.Native/Waddamburo.Platform.Prospero.Native.csproj" />
+    <ProjectReference Include="../Waddamburo.Providers.Stock/Waddamburo.Providers.Stock.csproj" />
+    <ProjectReference Include="../Waddamburo.Providers.Tja/Waddamburo.Providers.Tja.csproj" />
+    <ProjectReference Include="../Waddamburo.Providers.OsuLazer/Waddamburo.Providers.OsuLazer.csproj" />
+    <ProjectReference Include="../Waddamburo.Upscale/Waddamburo.Upscale.csproj" />
+    <ProjectReference Include="$(SharpProsperoRoot)/src/SharpProspero/SharpProspero.csproj" />
+    <PackageReference Include="QRCoder" />
+    <EmbeddedResource Include="../Waddamburo.App/Resources/folders/**/*.png">
+      <Link>Resources/folders/%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="../Waddamburo.App/Languages/*.json" LogicalName="Waddamburo.Languages.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../Waddamburo.App/Upscale/realesr-animevideov3-x3.param;../Waddamburo.App/Upscale/realesr-animevideov3-x3.bin" LogicalName="Waddamburo.Upscale.%(Filename)%(Extension)" />
+    <!-- The compatibility layer does not yet implement Unix signal activation.
+         Use stop-the-world collections rather than the background collector. -->
+    <RuntimeHostConfigurationOption Include="System.GC.Concurrent" Value="false" Trim="false" />
+    <RuntimeHostConfigurationOption Include="System.GC.Server" Value="false" Trim="false" />
+    <!-- PS5 stack/thread resources are bounded. Retain the warmed workers rather
+         than repeatedly creating stacks after asset memory is already resident. -->
+    <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.MinThreads" Value="8" Trim="false" />
+    <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.MaxThreads" Value="8" Trim="false" />
+    <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.ThreadsToKeepAlive" Value="-1" Trim="false" />
+    <DirectPInvoke Include="bgfx;waddamburo_media;waddamburo_text;waddamburo_texture;e_sqlite3;waddamburo_ps5" />
+    <None Update="sce_sys/**/*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Import Project="$(SharpProsperoRoot)/build/Prospero.App.targets" />
+  <Target Name="ProsperoAddNativeEngine" BeforeTargets="ProsperoResolveRuntimePack">
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)../../out/build/native/ps5/engine-libraries.rsp')" Text="Build the PS5 native engine first with eng/prospero/build-native.sh." />
+    <ReadLinesFromFile File="$(MSBuildThisFileDirectory)../../out/build/native/ps5/engine-libraries.rsp">
+      <Output TaskParameter="Lines" ItemName="ProsperoEngineInput" />
+    </ReadLinesFromFile>
+    <ReadLinesFromFile File="$(MSBuildThisFileDirectory)../../out/build/native/ps5/engine-stubs.rsp">
+      <Output TaskParameter="Lines" ItemName="ProsperoStubLibrary" />
+    </ReadLinesFromFile>
+    <ItemGroup>
+      <ProsperoRuntimeLibrary Include="@(ProsperoEngineInput)" Condition="'%(Extension)' != '.o'" />
+      <ProsperoRuntimeObject Include="@(ProsperoEngineInput)" Condition="'%(Extension)' == '.o'" />
+    </ItemGroup>
+  </Target>
+</Project>

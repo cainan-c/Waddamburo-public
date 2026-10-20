@@ -8,11 +8,44 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
 struct waddamburo_text_context {
     FT_Library library;
     FT_Face face;
+    unsigned char *font_data;
 };
+
+/* FreeType file streams use mmap on Unix. PS5 app modules cannot issue that
+ * raw syscall; retain a normal read buffer for as long as the face uses it. */
+static FT_Error open_font(FT_Library library, const char *path, FT_Face *face,
+                          unsigned char **font_data)
+{
+    *font_data = NULL;
+#ifdef WADDAMBURO_TEXT_MEMORY_FONTS
+    FILE *file = fopen(path, "rb");
+    long length;
+    unsigned char *data;
+    FT_Error result;
+    if (file == NULL) return FT_Err_Cannot_Open_Resource;
+    if (fseek(file, 0, SEEK_END) != 0 || (length = ftell(file)) <= 0 ||
+        fseek(file, 0, SEEK_SET) != 0) {
+        fclose(file); return FT_Err_Cannot_Open_Resource;
+    }
+    data = (unsigned char *)malloc((size_t)length);
+    if (data == NULL) { fclose(file); return FT_Err_Out_Of_Memory; }
+    if (fread(data, 1, (size_t)length, file) != (size_t)length) {
+        fclose(file); free(data); return FT_Err_Cannot_Open_Resource;
+    }
+    fclose(file);
+    result = FT_New_Memory_Face(library, data, (FT_Long)length, 0, face);
+    if (result != 0) free(data);
+    else *font_data = data;
+    return result;
+#else
+    return FT_New_Face(library, path, 0, face);
+#endif
+}
 
 static int error_is_valid(const waddamburo_text_error *error)
 {
@@ -573,7 +606,7 @@ waddamburo_text_context *WADDAMBURO_TEXT_CALL waddamburo_text_context_create(
     }
     ft_error = FT_Init_FreeType(&context->library);
     if (ft_error == 0)
-        ft_error = FT_New_Face(context->library, utf8_font_path, 0, &context->face);
+        ft_error = open_font(context->library, utf8_font_path, &context->face, &context->font_data);
     if (ft_error != 0) {
         if (context->library != NULL)
             FT_Done_FreeType(context->library);
@@ -591,6 +624,7 @@ void WADDAMBURO_TEXT_CALL waddamburo_text_context_destroy(waddamburo_text_contex
         return;
     FT_Done_Face(context->face);
     FT_Done_FreeType(context->library);
+    free(context->font_data);
     free(context);
 }
 
@@ -605,6 +639,7 @@ waddamburo_text_result WADDAMBURO_TEXT_CALL waddamburo_text_render_vertical_rgba
 {
     FT_Library library = NULL;
     FT_Face face = NULL;
+    unsigned char *font_data = NULL;
     FT_Error ft_error;
     const uint8_t *cursor;
     uint32_t scalar;
@@ -643,7 +678,7 @@ waddamburo_text_result WADDAMBURO_TEXT_CALL waddamburo_text_render_vertical_rgba
     ft_error = FT_Init_FreeType(&library);
     if (ft_error != 0)
         goto font_failure;
-    ft_error = FT_New_Face(library, utf8_font_path, 0, &face);
+    ft_error = open_font(library, utf8_font_path, &face, &font_data);
     if (ft_error != 0)
         goto font_failure;
     pixel_size = (uint32_t)(((uint64_t)height * 9U) / ((uint64_t)glyph_count * 10U));
@@ -719,6 +754,7 @@ waddamburo_text_result WADDAMBURO_TEXT_CALL waddamburo_text_render_vertical_rgba
 
     FT_Done_Face(face);
     FT_Done_FreeType(library);
+    free(font_data);
     free(outline);
     free(mask);
     return set_error(error, WADDAMBURO_TEXT_OK, 0, "");
@@ -728,6 +764,7 @@ font_failure:
         FT_Done_Face(face);
     if (library != NULL)
         FT_Done_FreeType(library);
+    free(font_data);
     free(outline);
     free(mask);
     return set_error(error, WADDAMBURO_TEXT_ERROR_FONT, ft_error, "FreeType could not rasterize the requested title.");

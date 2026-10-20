@@ -39,3 +39,6 @@ crashdumps/
 !tests/fixtures/synthetic/**
 AGENTS.md
 CLAUDE.md
+
+# PS5 homebrew toolchains (pinned by eng/prospero/dependencies.json)
+.deps/

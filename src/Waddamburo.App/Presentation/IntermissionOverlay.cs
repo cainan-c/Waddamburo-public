@@ -125,8 +125,19 @@ internal static class SceneTextures
         var profile = Environment.GetEnvironmentVariable("WADDAMBURO_PROFILE") == "1";
         var start = profile ? Stopwatch.GetTimestamp() : 0;
         var rgbaBytes = scene.Textures.Sum(static texture => (long)texture.Rgba8.Length + texture.Bc7.Length);
-        var uploaded = scene.Layers.SelectMany(layer => uploadedAhead?.Invoke(layer.Content) ?? Upload(application, layer.Content))
-            .ToArray();
+        // Several layers can share the same prefetched movie. Upload/take it once:
+        // the first upload releases its CPU pixels, and taking an ahead upload
+        // transfers its GPU handles out of the presenter's cache.
+        var byContent = new Dictionary<LumenMovieContent, RenderTextureId[]>(ReferenceEqualityComparer.Instance);
+        var uploaded = scene.Layers.SelectMany(layer =>
+        {
+            if (!byContent.TryGetValue(layer.Content, out var textures))
+            {
+                textures = uploadedAhead?.Invoke(layer.Content) ?? Upload(application, layer.Content);
+                byContent.Add(layer.Content, textures);
+            }
+            return textures;
+        }).ToArray();
         if (profile)
         {
             using var process = Process.GetCurrentProcess();

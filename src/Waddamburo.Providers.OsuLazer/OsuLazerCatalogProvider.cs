@@ -30,7 +30,9 @@ public sealed class OsuLazerCatalogProvider : ISongCatalogProvider, ICatalogAsse
     /// </summary>
     public static string? FindDataFolder(string? configured)
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        bool prospero = AppContext.TryGetSwitch("Waddamburo.Prospero", out var enabled) && enabled;
+        if (prospero && configured is null) return null;
+        var home = prospero ? "/data/Waddamburo" : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var xdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
         string[] candidates = configured is not null ? [configured] :
         [

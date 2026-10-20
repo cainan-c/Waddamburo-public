@@ -78,6 +78,7 @@ internal sealed class ScenePresenter(SdlApplication application, DirectoryLumenM
             }
             _partial.Remove(content);
             content.ReleaseDecodedTexturePixels();
+            movies.NotifyUploaded(content);
             _uploadedAhead[content] = uploaded;
         }
     }
@@ -174,6 +175,8 @@ internal sealed class ScenePresenter(SdlApplication application, DirectoryLumenM
         var ahead = _uploadedAhead.Count + _partial.Count;
         var decoded = movies.DecodedPrefetches.Count();
         _textures = SceneTextures.Upload(application, scene, takeAhead);
+        if (AppContext.TryGetSwitch("Waddamburo.Prospero", out var console) && console)
+            movies.Forget(scene.Layers.Select(static layer => layer.Content).ToArray());
         Console.WriteLine($"Scene {scene.Id}: {ahead - _uploadedAhead.Count - _partial.Count} of {scene.Layers.Length} movies "
             + $"uploaded ahead ({ahead} ready, {decoded} decoded ahead); textures {application.TextureUsage}.");
         if (ahead - _uploadedAhead.Count - _partial.Count > 0)

@@ -1,5 +1,9 @@
 # Building Waddamburo
 
+For the PS5 homebrew target on the `prospero` branch, use the
+[PS5 build guide](README.PS5.md#build) and [toolchain reference](docs/development/prospero.md).
+The instructions below cover desktop builds.
+
 Waddamburo is a .NET 10 app plus four native libraries: `waddamburo_media` (FFmpeg and
 vgmstream: music, sounds, movies), `waddamburo_text` (FreeType: song titles),
 `waddamburo_texture` and `bgfx`. Without them the game runs silent or not at all.

@@ -13,7 +13,12 @@ cmake_host_system_information(RESULT _ffmpeg_jobs QUERY NUMBER_OF_LOGICAL_CORES)
 set(_ffmpeg_platform_options --arch=x86_64 --disable-x86asm)
 set(_ffmpeg_configure_command <SOURCE_DIR>/configure)
 
-if(MINGW AND CMAKE_CROSSCOMPILING)
+if(WADDAMBURO_PROSPERO)
+  list(APPEND _ffmpeg_platform_options
+    --enable-cross-compile --target-os=freebsd --enable-pthreads --enable-pic --disable-symver
+    --cc=${CMAKE_C_COMPILER} --cxx=${CMAKE_CXX_COMPILER}
+    --ar=${CMAKE_AR} --ranlib=${CMAKE_RANLIB} --pkg-config=pkg-config --host-cc=clang-19)
+elseif(MINGW AND CMAKE_CROSSCOMPILING)
   if(CMAKE_HOST_WIN32)
     # MSYS2: Windows cannot run the configure script itself.
     find_program(WADDAMBURO_BASH_EXECUTABLE NAMES bash REQUIRED)
