@@ -1116,7 +1116,9 @@ internal sealed class GameShell : IDisposable
         Audio?.Dispose();
         _audioDevice?.Dispose();
         DonRenderer?.Dispose();
-        Bake?.Stop(); // it upscales through the tool disposed next
+        if (AppContext.TryGetSwitch("Waddamburo.Prospero", out var consoleUpscale) && consoleUpscale)
+            Bake?.StopAndWait();
+        else Bake?.Stop(); // it upscales through the tool disposed next
         SceneTextures.Upscaler?.Dispose();
         Application.Dispose();
         _libraries.Dispose();

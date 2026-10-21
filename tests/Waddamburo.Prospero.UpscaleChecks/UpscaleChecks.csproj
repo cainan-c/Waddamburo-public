@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><DefineConstants>$(DefineConstants);WADDAMBURO_PROSPERO</DefineConstants></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Waddamburo.Game/Waddamburo.Game.csproj" />
+    <ProjectReference Include="../../src/Waddamburo.Upscale/Waddamburo.Upscale.csproj" />
+    <ProjectReference Include="../../src/Waddamburo.Platform.Prospero.Native/Waddamburo.Platform.Prospero.Native.csproj" />
+    <Compile Include="../../src/Waddamburo.App/Presentation/UpscaleTool.cs" Link="UpscaleTool.cs" />
+    <EmbeddedResource Include="../../src/Waddamburo.App/Upscale/realesr-animevideov3-x3.param;../../src/Waddamburo.App/Upscale/realesr-animevideov3-x3.bin" LogicalName="Waddamburo.Upscale.%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

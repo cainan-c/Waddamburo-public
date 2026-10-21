@@ -28,6 +28,6 @@ public sealed record ProsperoAssetLayout(
             .Select(name => Path.Combine(fontRoot, name)).FirstOrDefault(File.Exists)
             ?? fonts.FirstOrDefault()
             ?? throw new FileNotFoundException($"No TTF, OTF or TTC font in {fontRoot}.");
-        return new(data, lumen, don, sound, font, Path.Combine(root, "custom_songs"), Path.GetFullPath(home));
+        return new(data, lumen, don, sound, font, ProsperoSongFolders.Console.Tja, Path.GetFullPath(home));
     }
 }

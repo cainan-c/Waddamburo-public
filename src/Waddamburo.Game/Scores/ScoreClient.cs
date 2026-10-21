@@ -80,6 +80,9 @@ public sealed class ScoreClient(HttpClient http)
     /// <summary>The client's HTTP connection (its token), for other endpoints such as home pairing.</summary>
     public HttpClient Http => http;
 
+    /// <summary>Optional platform HTTP transport, installed by console entry points.</summary>
+    public static Func<bool, HttpMessageHandler>? PlatformHandlerFactory { get; set; }
+
     /// <summary>
     /// A client for <paramref name="server"/>. <paramref name="insecure"/> skips certificate checks
     /// (a local server's self-signed certificate); anyone on the network can then read the token.
@@ -87,14 +90,19 @@ public sealed class ScoreClient(HttpClient http)
     public static HttpClient CreateHttp(Uri server, bool insecure, string? token = null)
     {
         ArgumentNullException.ThrowIfNull(server);
-        var handler = new HttpClientHandler();
-        if (insecure)
-            handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+        var handler = PlatformHandlerFactory?.Invoke(insecure) ?? DesktopHandler(insecure);
         var http = new HttpClient(handler) { BaseAddress = server, Timeout = TimeSpan.FromSeconds(15) };
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         if (token is not null)
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return http;
+    }
+
+    private static HttpClientHandler DesktopHandler(bool insecure)
+    {
+        var handler = new HttpClientHandler();
+        if (insecure) handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+        return handler;
     }
 
     public async Task<ScoreAccount> LoginAsync(string login, string password, string? code, string device,

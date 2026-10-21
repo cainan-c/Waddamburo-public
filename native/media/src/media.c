@@ -78,6 +78,15 @@ static void set_error(waddamburo_media_error *error, waddamburo_media_result cod
     set_error_details(error, code, 0, message);
 }
 
+uint32_t WADDAMBURO_MEDIA_CALL waddamburo_media_has_g719(void)
+{
+#if defined(WADDAMBURO_MEDIA_HAS_G719)
+    return 1U;
+#else
+    return 0U;
+#endif
+}
+
 uint32_t WADDAMBURO_MEDIA_CALL waddamburo_media_get_abi_version(void)
 {
     return WADDAMBURO_MEDIA_ABI_VERSION_CURRENT;
@@ -1201,6 +1210,8 @@ waddamburo_media_decoder_seek(waddamburo_media_decoder *decoder, uint64_t frame_
         decoder_set_cancelled(decoder, false);
         input_frame = av_rescale((int64_t)frame_index, decoder->input_sample_rate,
                                  decoder->output_sample_rate);
+        if (decoder->vgmstream->decoder->done)
+            libvgmstream_reset(decoder->vgmstream);
         libvgmstream_seek(decoder->vgmstream, input_frame);
         swr_close(decoder->resampler);
         result = swr_init(decoder->resampler);

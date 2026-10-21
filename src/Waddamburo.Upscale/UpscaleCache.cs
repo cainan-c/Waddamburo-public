@@ -24,11 +24,11 @@ public sealed class UpscaleCache : IDisposable
     private readonly long _mapped;
     private long _end;
 
-    public UpscaleCache(string path)
+    public UpscaleCache(string path, bool useMemoryMapping = true)
     {
         _file = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
         scan();
-        _mapped = _end;
+        _mapped = useMemoryMapping ? _end : 0;
         if (_mapped > 0)
         {
             _map = MemoryMappedFile.CreateFromFile(_file, null, 0, MemoryMappedFileAccess.Read, HandleInheritability.None, leaveOpen: true);

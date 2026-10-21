@@ -61,6 +61,10 @@ public static class VgmstreamCli
     /// <summary>The decoded WAV for <paramref name="path"/>, or null when vgmstream-cli is missing or fails.</summary>
     public static string? TryDecode(string path, uint sourceStreamIndex)
     {
+        // PS5 uses in-process vgmstream; it cannot run the desktop executable.
+        // Return before hashing, Guid generation, cache writes or process setup.
+        if (AppContext.TryGetSwitch("Waddamburo.Prospero", out var prospero) && prospero)
+            return null;
         var source = new FileInfo(path);
         if (!source.Exists)
             return null;

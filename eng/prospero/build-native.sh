@@ -20,6 +20,7 @@ cmake -S "$root/native" -B "$build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release -DWADDAMBURO_PROSPERO=ON -DWADDAMBURO_PACKAGE=ON \
     -DWADDAMBURO_BUILD_BGFX=OFF -DBUILD_TESTING=OFF
 cmake --build "$build" --parallel "${BUILD_JOBS:-4}"
+bash "$root/eng/prospero/build-realm.sh" "$build"
 echo "Native engine archives built in $build"
 # NativeAOT emits the application's object on Linux. A final Linux executable
 # cannot link PS5 service imports; the PS5 linker consumes the completed object.

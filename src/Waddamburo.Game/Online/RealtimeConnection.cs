@@ -23,7 +23,9 @@ public sealed class RealtimeConnection(Uri url, bool insecure = false) : IAsyncD
     private readonly HashSet<string> _channels = [];
     private readonly CancellationTokenSource _stop = new();
     private readonly SemaphoreSlim _send = new(1, 1);
-    private ClientWebSocket? _socket;
+    public static Func<Uri, bool, CancellationToken, Task<WebSocket>>? PlatformConnectFactory { get; set; }
+
+    private WebSocket? _socket;
     private string? _socketId;
     private Task? _run;
 
@@ -90,14 +92,8 @@ public sealed class RealtimeConnection(Uri url, bool insecure = false) : IAsyncD
             int? closeCode = null;
             try
             {
-                using var socket = new ClientWebSocket();
-                // server_insecure: a local server's self-signed certificate, as ScoreClient.CreateHttp accepts it.
-#pragma warning disable CA5359
-                if (insecure)
-                    socket.Options.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
-#pragma warning restore CA5359
                 var query = $"protocol=7&client=waddamburo&version={typeof(RealtimeConnection).Assembly.GetName().Version}";
-                await socket.ConnectAsync(new UriBuilder(url) { Query = query }.Uri, cancellationToken).ConfigureAwait(false);
+                using var socket = await ConnectSocketAsync(new UriBuilder(url) { Query = query }.Uri, insecure, cancellationToken).ConfigureAwait(false);
                 _socket = socket;
                 await readAsync(socket, () => backoff = ReconnectDelay, cancellationToken).ConfigureAwait(false);
                 closeCode = (int?)socket.CloseStatus;
@@ -150,7 +146,22 @@ public sealed class RealtimeConnection(Uri url, bool insecure = false) : IAsyncD
         }
     }
 
-    private async Task readAsync(ClientWebSocket socket, Action connected, CancellationToken cancellationToken)
+    private static async Task<WebSocket> ConnectSocketAsync(Uri uri, bool insecure, CancellationToken token)
+    {
+        if (PlatformConnectFactory is { } platform) return await platform(uri, insecure, token).ConfigureAwait(false);
+        var socket = new ClientWebSocket();
+        try
+        {
+#pragma warning disable CA5359
+            if (insecure) socket.Options.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
+#pragma warning restore CA5359
+            await socket.ConnectAsync(uri, token).ConfigureAwait(false);
+            return socket;
+        }
+        catch { socket.Dispose(); throw; }
+    }
+
+    private async Task readAsync(WebSocket socket, Action connected, CancellationToken cancellationToken)
     {
         var buffer = new byte[16 * 1024];
         var message = new MemoryStream();

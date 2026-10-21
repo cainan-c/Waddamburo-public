@@ -99,6 +99,25 @@ public sealed unsafe class NativeAudioDecoder : IDisposable
             throw new NotSupportedException("The native media library has an incompatible ABI.");
         }
 
+        // The callback ABI has no source filename and only probes FFmpeg.
+        // Console banks need the filename-aware native vgmstream entry point.
+        if (AppContext.TryGetSwitch("Waddamburo.Prospero", out var prospero) && prospero
+            && input is FileStream bank && bank.Position == 0
+            && Path.GetExtension(bank.Name).ToLowerInvariant() is ".nus3bank" or ".nus3audio")
+        {
+            _inputState = new InputState(input, leaveOpen);
+            try
+            {
+                using var native = new NativeAudioDecoder(bank.Name, outputSampleRate, outputChannels, sourceStreamIndex);
+                _handle = native._handle;
+                _channels = native._channels;
+                Info = native.Info;
+                native._handle = 0; // transfer the native decoder; retain provider-stream ownership here
+            }
+            catch { Dispose(); throw; }
+            return;
+        }
+
         var state = new InputState(input, leaveOpen);
         _inputState = state;
         _inputHandle = GCHandle.Alloc(state);

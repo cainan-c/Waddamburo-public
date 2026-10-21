@@ -81,6 +81,12 @@
           "Waddamburo.Lumen": "[0.0.0-dev, )"
         }
       },
+      "waddamburo.providers.tja": {
+        "type": "Project",
+        "dependencies": {
+          "Waddamburo.Catalog": "[0.0.0-dev, )"
+        }
+      },
       "Microsoft.Data.Sqlite": {
         "type": "CentralTransitive",
         "requested": "[10.0.12, )",

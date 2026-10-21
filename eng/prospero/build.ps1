@@ -10,6 +10,15 @@ if (Test-Path $localDotNet) {
     $env:DOTNET_ROOT = $localDotNet
     $env:PATH = $localDotNet + [IO.Path]::PathSeparator + $env:PATH
 }
+function Assert-ProsperoDisplayMetadata([string]$Path) {
+    $metadata = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    # 0x40 declares high-frame-rate support; keep the existing 0x40000 profile,
+    # without the alternate 0x80000 VRR-required declaration.
+    if (($metadata.attribute3 -band 0xC0040) -ne 0x40040) {
+        throw "PS5 high-refresh metadata is missing or changed in $Path; expected attribute3 mask 0x40040."
+    }
+}
+Assert-ProsperoDisplayMetadata (Join-Path $repo 'src/Waddamburo.App.Prospero/sce_sys/param.json')
 Push-Location $repo
 try {
     $version = & dotnet --version
@@ -56,6 +65,7 @@ try {
     $gameOutput = Join-Path $repo 'out/prospero-game'
     & (Join-Path $sdk 'build/build-app.ps1') -SdkRoot $sdk -ProjectPath $project -Output $Output -OutputFolder $gameOutput
     if ($LASTEXITCODE -ne 0) { throw 'PS5 NativeAOT, link, or packaging failed.' }
+    Assert-ProsperoDisplayMetadata (Join-Path $gameOutput 'module/sce_sys/param.json')
     $dataOutput = Join-Path $gameOutput 'module/Data'
     New-Item -ItemType Directory -Force $dataOutput | Out-Null
     Copy-Item (Join-Path $repo 'src/Waddamburo.App.Prospero/Data/README.txt') $dataOutput

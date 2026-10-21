@@ -13,6 +13,9 @@
     <RootNamespace>Waddamburo.App</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DefineConstants>$(DefineConstants);WADDAMBURO_PROSPERO</DefineConstants>
+    <!-- PS5/PS5 Pro are fixed AMD targets. In this .NET 10 compiler, the avx2
+         group includes FMA. Baseline x64 emits scalar fmaf calls in convolution. -->
+    <IlcInstructionSet>avx2</IlcInstructionSet>
     <ProsperoModuleName>eboot.bin</ProsperoModuleName>
   </PropertyGroup>
   <ItemGroup>
@@ -39,10 +42,17 @@
     <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.MinThreads" Value="8" Trim="false" />
     <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.MaxThreads" Value="8" Trim="false" />
     <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.ThreadsToKeepAlive" Value="-1" Trim="false" />
+    <DirectPInvoke Include="realm-wrappers" />
     <DirectPInvoke Include="bgfx;waddamburo_media;waddamburo_text;waddamburo_texture;e_sqlite3;waddamburo_ps5" />
     <None Update="sce_sys/**/*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Import Project="$(SharpProsperoRoot)/build/Prospero.App.targets" />
+  <!-- prepare-link stages a matched and symbol-isolated CLR compression pair. -->
+  <Target Name="ProsperoRemoveUnisolatedCompression" AfterTargets="ProsperoResolveRuntimePack">
+    <ItemGroup>
+      <ProsperoRuntimeLibrary Remove="@(ProsperoRuntimeLibrary)" Condition="'%(Filename)%(Extension)' == 'libz.a' Or '%(Filename)%(Extension)' == 'libSystem.IO.Compression.Native.a'" />
+    </ItemGroup>
+  </Target>
   <Target Name="ProsperoAddNativeEngine" BeforeTargets="ProsperoResolveRuntimePack">
     <Error Condition="!Exists('$(MSBuildThisFileDirectory)../../out/build/native/ps5/engine-libraries.rsp')" Text="Build the PS5 native engine first with eng/prospero/build-native.sh." />
     <ReadLinesFromFile File="$(MSBuildThisFileDirectory)../../out/build/native/ps5/engine-libraries.rsp">

@@ -6,6 +6,7 @@
     <ProjectReference Include="../Waddamburo.Formats/Waddamburo.Formats.csproj" />
     <ProjectReference Include="../Waddamburo.Lumen/Waddamburo.Lumen.csproj" />
     <ProjectReference Include="../../.deps/prospero/SharpProspero/src/SharpProspero/SharpProspero.csproj" />
+    <EmbeddedResource Include="../../native/prospero/certs/cacert.pem" LogicalName="Waddamburo.CaRoots.pem" />
     <EmbeddedResource Include="../Waddamburo.Platform.Sdl/Shaders/Compiled/*.*" LogicalName="Waddamburo.Shaders.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

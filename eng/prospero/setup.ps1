@@ -9,7 +9,7 @@ foreach ($entry in $pins.PSObject.Properties) {
     $destination = Join-Path $deps $entry.Name
     $pin = $entry.Value
     if (-not (Test-Path $destination)) {
-        & git clone --config core.autocrlf=false --no-checkout $pin.url $destination
+        & git clone --config core.autocrlf=false --config core.longpaths=true --no-checkout $pin.url $destination
         if ($LASTEXITCODE -ne 0) { throw "Could not clone $($entry.Name)" }
         & git -C $destination checkout --detach $pin.revision
         if ($LASTEXITCODE -ne 0) { throw "Could not select pinned $($entry.Name) revision" }

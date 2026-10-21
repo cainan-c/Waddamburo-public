@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework>
+    <PublishAot>true</PublishAot><OptimizationPreference>Size</OptimizationPreference>
+    <IlcOptimizationPreference>Size</IlcOptimizationPreference><StripSymbols>false</StripSymbols>
+    <IlcInstructionSet Condition="'$(CpuProfile)' == 'ps5'">avx2</IlcInstructionSet>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Waddamburo.Upscale/Waddamburo.Upscale.csproj" />
+    <EmbeddedResource Include="../../src/Waddamburo.App/Upscale/realesr-animevideov3-x3.param;../../src/Waddamburo.App/Upscale/realesr-animevideov3-x3.bin" LogicalName="Waddamburo.Upscale.%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

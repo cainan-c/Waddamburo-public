@@ -14,7 +14,7 @@ namespace Waddamburo.Upscale;
 public sealed class CompactUpscaler : IDisposable
 {
     private const uint Fp16Tag = 0x01306B47;
-    private const int TileSize = 256;
+    private static int TileSize => AppContext.TryGetSwitch("Waddamburo.Prospero", out var enabled) && enabled ? 64 : 256;
     private sealed record Layer(int Inputs, int Outputs, float[] Weights, float[] Bias, float[]? Slopes)
     {
         /// <summary>Weights as [output block of 8][input][tap][8].</summary>
@@ -145,6 +145,7 @@ public sealed class CompactUpscaler : IDisposable
     public (int Width, int Height, byte[] Rgba) Upscale(int width, int height, ReadOnlySpan<byte> rgba, int threads,
         Func<bool>? pause = null)
     {
+        while (pause?.Invoke() == true) Thread.Sleep(100);
         // The network's output (shuffle x) as float RGB planes, then resized.
         var bigWidth = width * _shuffle;
         var bigHeight = height * _shuffle;
@@ -162,7 +163,7 @@ public sealed class CompactUpscaler : IDisposable
             {
                 while (pause?.Invoke() == true)
                     Thread.Sleep(100);
-                runTile(source, width, height, tile.X, tile.Y, big, bigWidth);
+                runTile(source, width, height, tile.X, tile.Y, big, bigWidth, pause);
             });
 
         var outWidth = (int)Math.Round(width * Scale);
@@ -180,7 +181,7 @@ public sealed class CompactUpscaler : IDisposable
         return (outWidth, outHeight, result);
     }
 
-    private void runTile(float[] source, int width, int height, int tileX, int tileY, float[] big, int bigWidth)
+    private void runTile(float[] source, int width, int height, int tileX, int tileY, float[] big, int bigWidth, Func<bool>? pause)
     {
         var halo = _layers.Length;
         var innerWidth = Math.Min(TileSize, width - tileX);
@@ -219,6 +220,7 @@ public sealed class CompactUpscaler : IDisposable
             }
         foreach (var layer in _layers)
         {
+            while (pause?.Invoke() == true) Thread.Sleep(100);
             convolve(layer, current, next, w, h, stride, planeSize);
             // Outside the image stays zero (the next layer's padding), as in a whole-image run.
             for (var c = 0; c < layer.Outputs; c++)

@@ -29,6 +29,8 @@ internal sealed class UpscaleTool : IDisposable
     private const string CacheName = "textures.tar";
     private const int Header = 8; // entry: width, height (uint32 LE), then the BC7 blocks
     private readonly CompactUpscaler _model;
+    private readonly Lock _inference = new();
+    private static bool ConsoleMode => AppContext.TryGetSwitch("Waddamburo.Prospero", out var enabled) && enabled;
     private readonly HashSet<string> _used = new(StringComparer.Ordinal);
     private readonly UpscaleCache _textures;
     // Pixel arrays that are upscaled copies decoded from BC7 (renderers without BC7), so the live
@@ -46,7 +48,7 @@ internal sealed class UpscaleTool : IDisposable
             Directory.Delete(work, recursive: true);
         var cachePath = Path.Combine(cache, CacheName);
         convertPngCache(cache, cachePath);
-        _textures = new UpscaleCache(cachePath);
+        _textures = new UpscaleCache(cachePath, useMemoryMapping: !ConsoleMode);
         _sized = _textures.Names.Count(static name => name.Contains('@', StringComparison.Ordinal));
     }
 
@@ -126,11 +128,20 @@ internal sealed class UpscaleTool : IDisposable
 
     private static string hash(UpscaleSource source)
     {
+#if WADDAMBURO_PROSPERO
+        // Preserve the desktop dimension/pixel hash without invoking Linux OpenSSL.
+        var hash = new SharpProspero.Security.Sha256();
+        hash.Update(BitConverter.GetBytes(source.Width));
+        hash.Update(BitConverter.GetBytes(source.Height));
+        hash.Update(source.Rgba);
+        return Convert.ToHexString(hash.Finish())[..32];
+#else
         using var hash = SHA256.Create();
         hash.TransformBlock(BitConverter.GetBytes(source.Width), 0, 4, null, 0);
         hash.TransformBlock(BitConverter.GetBytes(source.Height), 0, 4, null, 0);
         hash.TransformFinalBlock(source.Rgba, 0, source.Rgba.Length);
         return Convert.ToHexString(hash.Hash!)[..32];
+#endif
     }
 
     public bool IsCached(string key) => _textures.Contains(key);
@@ -177,6 +188,16 @@ internal sealed class UpscaleTool : IDisposable
     /// <paramref name="pause"/> is checked between tiles (live upscaling holds during gameplay).
     /// </summary>
     public void Upscale(UpscaleSource source, int threads, Func<bool>? pause = null)
+    {
+        // Live work and a bake share the model and its large output planes.
+        if (ConsoleMode)
+        {
+            lock (_inference) upscale(source, Math.Clamp(threads, 1, 2), pause);
+        }
+        else upscale(source, threads, pause);
+    }
+
+    private void upscale(UpscaleSource source, int threads, Func<bool>? pause)
     {
         var width = (int)source.Width;
         var height = (int)source.Height;
@@ -264,7 +285,7 @@ internal sealed class UpscaleTool : IDisposable
         if (!File.Exists(old) && loose.Length == 0)
             return;
         Console.WriteLine("Converting the upscaled-texture cache to BC7 (once; a minute or two)...");
-        using var textures = new UpscaleCache(target);
+        using var textures = new UpscaleCache(target, useMemoryMapping: !ConsoleMode);
         void convert(string name, byte[] png)
         {
             var bc7 = Path.GetFileNameWithoutExtension(name) + ".bc7";
@@ -275,7 +296,7 @@ internal sealed class UpscaleTool : IDisposable
         }
         if (File.Exists(old))
         {
-            using var pngs = new UpscaleCache(old);
+            using var pngs = new UpscaleCache(old, useMemoryMapping: !ConsoleMode);
             Parallel.ForEach(pngs.Names.Where(static name => name.EndsWith(".png", StringComparison.Ordinal)),
                 name => convert(name, pngs.Read(name).ToArray()));
         }

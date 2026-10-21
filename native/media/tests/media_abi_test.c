@@ -286,7 +286,7 @@ int main(void)
     }
 #endif
 
-#if defined(WADDAMBURO_MEDIA_HAS_VGMSTREAM)
+#if defined(WADDAMBURO_MEDIA_HAS_VGMSTREAM) && !defined(WADDAMBURO_MEDIA_HAS_G719)
     {
         /* IS22 is G.719, which the bundled vgmstream never includes: the decoder must reject
          * it as unsupported so managed code can fall back to a user-supplied vgmstream-cli. */

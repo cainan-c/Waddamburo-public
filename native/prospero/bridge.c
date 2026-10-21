@@ -37,7 +37,6 @@ typedef struct {
     uint32_t plane,stack; VkDisplayPlaneAlphaFlagBitsKHR alpha;
 } NativeDisplay;
 #define PROC(type,name) type name=(type)vk_icdGetInstanceProcAddr(instance,#name)
-extern void waddamburo_display_set_high_refresh_available(int available);
 static VkResult discover(VkInstance instance,NativeDisplay* out) {
     PROC(PFN_vkEnumeratePhysicalDevices,vkEnumeratePhysicalDevices);
     PROC(PFN_vkGetPhysicalDeviceDisplayPropertiesKHR,vkGetPhysicalDeviceDisplayPropertiesKHR);
@@ -63,9 +62,6 @@ static VkResult discover(VkInstance instance,NativeDisplay* out) {
     VkDisplayModePropertiesKHR* modes=calloc(count,sizeof(*modes)); if (!modes) return VK_ERROR_OUT_OF_HOST_MEMORY;
     result=vkGetDisplayModePropertiesKHR(out->physical,out->display,&count,modes);
     if (result!=VK_SUCCESS) { free(modes); return result; }
-    int high_refresh=0;
-    for (uint32_t i=0;i<count;i++) if (modes[i].parameters.refreshRate>=100000) high_refresh=1;
-    waddamburo_display_set_high_refresh_available(high_refresh);
     out->mode=modes[0].displayMode; out->extent=modes[0].parameters.visibleRegion; free(modes); count=0;
     if (vkGetPhysicalDeviceDisplayPlanePropertiesKHR(out->physical,&count,NULL)!=VK_SUCCESS || !count) return VK_ERROR_INITIALIZATION_FAILED;
     VkDisplayPlanePropertiesKHR* planes=calloc(count,sizeof(*planes)); if (!planes) return VK_ERROR_OUT_OF_HOST_MEMORY;

@@ -1,3 +1,4 @@
+using Waddamburo.Catalog;
 using System.Globalization;
 
 namespace Waddamburo.Game.Flow;
@@ -16,7 +17,7 @@ public sealed record ArcadeSettings
     public const string FileName = "config.cfg";
 
     /// <summary>The config_version this build writes. Bump it with each new entry in <see cref="Additions"/>.</summary>
-    public const int CurrentVersion = 21;
+    public const int CurrentVersion = 22;
 
     // Version 2's mode for a file written before it: a cabinet (token, or coins) stays arcade.
     private const string ModePlaceholder = "{mode}";
@@ -219,6 +220,14 @@ public sealed record ArcadeSettings
         mouse_controls = true
 
         """,
+        """
+        # Optional user-supplied Nijiiro AES-256 keys (64 hex characters each).
+        # Datatable decrypts musicinfo/wordlist; fumen decrypts charts.
+        # Empty uses the installation loader as before. Restart after editing.
+        nijiiro_datatable_key =
+        nijiiro_fumen_key =
+
+        """,
     ];
 
     /// <summary>The drum pads' settings, in the order of <see cref="Controls"/>.</summary>
@@ -403,6 +412,13 @@ public sealed record ArcadeSettings
 
     /// <summary>A Nijiiro installation (null: none).</summary>
     public string? NijiiroFolder { get; init; }
+
+    /// <summary>Optional user-supplied table key. Its diagnostic representation is redacted.</summary>
+    public NijiiroDecryptionKey? NijiiroDatatableKey { get; init; }
+
+    /// <summary>Optional user-supplied chart key. Its diagnostic representation is redacted.</summary>
+    public NijiiroDecryptionKey? NijiiroFumenKey { get; init; }
+
 
     /// <summary>
     /// The cache folder for decoded songs and upscaled textures: null or <see cref="UserCacheValue"/> =
@@ -601,6 +617,8 @@ public sealed record ArcadeSettings
                 // ponytail: '#' starts a comment, so a folder path cannot contain one.
                 "tja_folder" => settings with { TjaFolder = value.Length == 0 ? null : value },
                 "nijiiro_folder" => settings with { NijiiroFolder = value.Length == 0 ? null : value },
+                "nijiiro_datatable_key" => settings with { NijiiroDatatableKey = nijiiroKey(value, index) },
+                "nijiiro_fumen_key" => settings with { NijiiroFumenKey = nijiiroKey(value, index) },
                 "osu_folder" => settings with { OsuFolder = value.Length == 0 ? null : value },
                 "cache_folder" => settings with { CacheFolder = value.Length == 0 ? null : value },
                 "osu_group" => settings with { OsuBrowse = settings.OsuBrowse with
@@ -744,6 +762,16 @@ public sealed record ArcadeSettings
         var temporary = path + ".tmp";
         File.WriteAllText(temporary, text);
         File.Move(temporary, path, overwrite: true);
+    }
+
+    private static NijiiroDecryptionKey? nijiiroKey(string value, int line)
+    {
+        if (value.Length == 0) return null;
+        try { return NijiiroDecryptionKey.Parse(value); }
+        catch (FormatException)
+        {
+            throw new InvalidDataException($"{FileName} line {line}: Nijiiro keys must be empty or exactly 64 hexadecimal characters.");
+        }
     }
 
     private static bool boolean(string value, int line) => value.ToLowerInvariant() switch

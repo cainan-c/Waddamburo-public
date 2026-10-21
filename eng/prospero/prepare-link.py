@@ -81,9 +81,16 @@ archives = [one('stage/Release/lib/libwaddamburo_' + name + '.a') for name in ('
 archives += [one('**/' + name) for name in ('libe_sqlite3.a', 'libwaddamburo_ps5.a')]
 archives += sorted((build / 'bgfx').rglob('*.a'))
 archives += [build / 'ffmpeg/prefix/lib' / ('lib' + name + '.a') for name in ('avformat', 'avcodec', 'swresample', 'swscale', 'avutil', 'opus')]
-archives += [build / 'freetype/prefix/lib/libfreetype.a', build / 'vgmstream/build/src/libvgmstream.a']
+archives += [build / 'freetype/prefix/lib/libfreetype.a', build / 'vgmstream/build/src/libvgmstream.a',
+    build / 'vgmstream/build/dependencies/libg719_decode/libg719_decode.a']
 archives += [sdk / 'target/lib' / name for name in ('libc++.a', 'libc++abi.a', 'libunwind.a', 'libc.a')]
 archives += [platform]
+# Realm .NET's matching wrapper/Core archives use the native PS5 ABI.
+realm_build = build.parent / 'realm'
+realm_archives = sorted(path for path in realm_build.rglob('*.a') if 'CMakeFiles' not in path.parts)
+if not any(path.name == 'librealm-wrappers.a' for path in realm_archives):
+    raise SystemExit('Build the pinned Realm backend with eng/prospero/build-realm.sh first.')
+archives += realm_archives
 linked = []
 optional = stage / 'linux-optional.o'
 subprocess.run(['clang-19', '-target', 'x86_64-linux-gnu', '-O2', '-fPIC', '-fno-stack-protector',
@@ -129,13 +136,14 @@ sections.write_text('''SECTIONS {
   .eh_frame : { *(.eh_frame) }
 }
 ''')
-subprocess.run([lld, '-r', '-T', str(sections), '--whole-archive', str(radv), '--no-whole-archive', '-o', str(whole)], check=True)
-driver = stage / 'radv.o'
-subprocess.run([objcopy, '--strip-debug', '--redefine-syms=' + str(mapping), str(whole), str(driver)], check=True)
+# Keep RADV as a mapped archive until the single final native partial link.
+# Feeding a merged relocatable object back into lld would encounter multiple
+# relocation tables for its merged sections; the custom final linker handles
+# those tables, so merge only once, after all native C++ inputs are present.
+driver = stage / 'radv-native.a'
+subprocess.run([objcopy, '--strip-debug', '--redefine-syms=' + str(mapping), str(radv), str(driver)], check=True)
 subprocess.run([objcopy, '--redefine-sym=sceVideoOutOpen=waddamburo_videoout_open', str(driver)], check=True)
 subprocess.run(['python3', str(root / 'eng/prospero/normalize-constructors.py'), str(driver)], check=True)
-whole.unlink()
-linked.append(driver)
 
 resource = subprocess.check_output(['clang', '--print-resource-dir'], text=True).strip()
 builtins = Path(resource) / 'lib/linux/libclang_rt.builtins-x86_64.a'
@@ -143,8 +151,23 @@ destination = stage / builtins.name
 shutil.copyfile(builtins, destination)
 linked.append(destination)
 
-# Reachable offline application types still carry the framework's optional TLS code.
-# Stage its native glue for linking; the first build boots with the server disabled.
+# Let ELF lld resolve native C++ COMDAT groups and their FDE/LSDA records
+# together. Use actual AOT imports as roots and normal archive extraction;
+# whole-archiving bimg's overlapping component archives duplicates miniz.
+app_object = root / 'src/Waddamburo.App.Prospero/obj/Release/net10.0/linux-x64/native/Waddamburo.App.Prospero.o'
+undefined = subprocess.check_output([nm, '--undefined-only', '--extern-only', '--format=posix', str(app_object)], text=True)
+roots = sorted(set(re.findall(r'^(\S+) U ', undefined, re.M)))
+combined = stage / 'native-engine.o'
+objects = [path for path in linked if path.suffix == '.o']
+libraries = [path for path in linked if path.suffix == '.a']
+subprocess.run([lld, '-r', '-T', str(sections), *[arg for name in roots for arg in ('-u', name)],
+    *map(str, objects), '--whole-archive', str(driver), '--no-whole-archive',
+    '--start-group', *map(str, libraries), '--end-group',
+    '-o', str(combined)], check=True)
+linked = [combined]
+
+# Desktop fallback types still carry the framework's optional TLS imports.
+# Stage their native glue for linking; PS5 transports use console system services.
 assets = root / 'src/Waddamburo.App.Prospero/obj/project.assets.json'
 import json
 restore = json.loads(assets.read_text())
@@ -152,6 +175,10 @@ packages = next(iter(restore['packageFolders']))
 compiler_key = next(key for key in restore['libraries'] if key.lower().startswith('microsoft.dotnet.ilcompiler/'))
 runtime_key = 'microsoft.netcore.app.runtime.nativeaot.linux-x64/' + compiler_key.split('/')[1]
 runtime = Path(packages) / runtime_key.lower() / 'runtimes/linux-x64/native'
+# The native engine and the CLR may carry different zlib implementations.
+# Keep the CLR bridge, inflater, internal state and helpers in one symbol domain.
+subprocess.run(['python3', str(root / 'eng/prospero/prepare-compression.py'), str(runtime), str(stage)], check=True)
+linked.extend([stage / 'clr-compression.a', stage / 'clr-zlib.a'])
 for name in ('libSystem.Security.Cryptography.Native.OpenSsl.a', 'libSystem.Net.Security.Native.a'):
     destination = stage / name
     shutil.copyfile(runtime / name, destination)

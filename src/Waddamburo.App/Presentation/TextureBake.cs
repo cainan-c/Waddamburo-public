@@ -32,6 +32,9 @@ internal sealed class TextureBake
     private int _texturesDone, _archivesScanned;
 
     private TextureBake(int threads) => Threads = threads;
+    private Task? _run;
+    private static bool ConsoleMode => AppContext.TryGetSwitch("Waddamburo.Prospero", out var enabled) && enabled;
+    public void StopAndWait() { Stop(); _run?.GetAwaiter().GetResult(); }
 
     public int Threads { get; }
 
@@ -68,8 +71,8 @@ internal sealed class TextureBake
     /// <summary>Starts a bake on <paramref name="threads"/> threads (all cores but two by default).</summary>
     public static TextureBake Start(UpscaleTool tool, string lumenRoot, int? threads = null)
     {
-        var bake = new TextureBake(threads ?? Math.Max(1, Environment.ProcessorCount - 2));
-        _ = Task.Run(() => bake.run(tool, lumenRoot));
+        var bake = new TextureBake(ConsoleMode ? Math.Clamp(threads ?? 2, 1, 2) : threads ?? Math.Max(1, Environment.ProcessorCount - 2));
+        bake._run = Task.Run(() => bake.run(tool, lumenRoot));
         return bake;
     }
 
@@ -116,8 +119,11 @@ internal sealed class TextureBake
             Phase = BakePhase.Upscaling;
             _upscaling.Start();
             // Nested parallel loops: without spare pool threads the pool adds them only slowly.
-            ThreadPool.GetMinThreads(out var workers, out var ports);
-            ThreadPool.SetMinThreads(Math.Max(workers, Threads * 2), ports);
+            if (!ConsoleMode)
+            {
+                ThreadPool.GetMinThreads(out var workers, out var ports);
+                ThreadPool.SetMinThreads(Math.Max(workers, Threads * 2), ports);
+            }
             foreach (var (archive, keys) in missing)
             {
                 // Textures side by side, largest first and handed out one at a time, and each texture's
@@ -125,14 +131,18 @@ internal sealed class TextureBake
                 var sources = textures(lumenRoot, archive).Where(source => keys.Remove(UpscaleTool.Key(source)))
                     .OrderByDescending(static source => source.Width * source.Height).ToArray();
                 Parallel.ForEach(Partitioner.Create(sources, loadBalance: true),
-                    new ParallelOptions { MaxDegreeOfParallelism = Threads }, (source, loop) =>
+                    new ParallelOptions { MaxDegreeOfParallelism = ConsoleMode ? 1 : Threads }, (source, loop) =>
                     {
                         if (_stopRequested)
                         {
                             loop.Stop();
                             return;
                         }
-                        tool.Upscale(source, Threads);
+                        tool.Upscale(source, Threads, () =>
+                        {
+                            if (_stopRequested) throw new OperationCanceledException();
+                            return false;
+                        });
                         Interlocked.Increment(ref _texturesDone);
                         Interlocked.Add(ref _pixelsDone, source.Width * source.Height);
                     });
@@ -142,6 +152,10 @@ internal sealed class TextureBake
             Phase = BakePhase.Done;
         }
         catch (OperationCanceledException)
+        {
+            Phase = BakePhase.Stopped;
+        }
+        catch (AggregateException exception) when (exception.Flatten().InnerExceptions.All(static error => error is OperationCanceledException))
         {
             Phase = BakePhase.Stopped;
         }

@@ -66,6 +66,73 @@ try
     Check(assets.Lumen == Path.Combine(temporary, "Data", "lumendata", "packed"), "Data directly contains lumendata, without a nested data folder");
     Check(assets.Font == Path.Combine(temporary, "Data", "font", "font.ttf"), "packaged title font resolves from Data/font");
     Check(!Directory.Exists(assets.Home), "resolving read-only assets does not create or move save files");
+    var consoleFolders = ProsperoSongFolders.Console;
+    Check(consoleFolders.Tja == "/data/Waddamburo/tja" && consoleFolders.Nijiiro == "/data/Waddamburo/nijiiro"
+        && consoleFolders.Osu == "/data/Waddamburo/osu", "console song paths use the requested fixed SSD roots");
+    var libraryRoot = Path.Combine(temporary, "libraries");
+    var songFolders = new ProsperoSongFolders(Path.Combine(libraryRoot, "tja"),
+        Path.Combine(libraryRoot, "nijiiro"), Path.Combine(libraryRoot, "osu"));
+    songFolders.EnsureCreated();
+    Check(Directory.Exists(songFolders.Tja) && Directory.Exists(songFolders.Nijiiro)
+        && Directory.Exists(songFolders.Osu), "startup creates all three song-library folders");
+    var retainedSong = Path.Combine(songFolders.Tja, "keep.tja");
+    File.WriteAllText(retainedSong, "synthetic chart marker");
+    songFolders.EnsureCreated();
+    Check(File.ReadAllText(retainedSong) == "synthetic chart marker", "startup retains existing song files");
+    var presetConfig = Path.Combine(temporary, "preset.cfg");
+    var presetSettings = songFolders.LoadSettings(presetConfig);
+    var persistedSettings = Waddamburo.Game.Flow.ArcadeSettings.LoadOrCreate(presetConfig);
+    Check(persistedSettings.TjaFolder == songFolders.Tja && persistedSettings.NijiiroFolder == songFolders.Nijiiro
+        && persistedSettings.OsuFolder == songFolders.Osu, "fresh config automatically persists the song roots");
+    Waddamburo.Game.Flow.ArcadeSettings.SaveMenuSettings(presetConfig, presetSettings with
+        { TjaFolder = "/data/tja", NijiiroFolder = "/data/nijiiro", OsuFolder = "/data/osu", FpsCap = 120, MusicVolume = 37 });
+    presetSettings = songFolders.LoadSettings(presetConfig);
+    Check(presetSettings.TjaFolder == songFolders.Tja && presetSettings.NijiiroFolder == songFolders.Nijiiro
+        && presetSettings.OsuFolder == songFolders.Osu && presetSettings.FpsCap == 120 && presetSettings.MusicVolume == 37,
+        "old top-level song roots update to the application home while retaining display and audio settings");
+    var presetText = File.ReadAllText(presetConfig);
+    songFolders.LoadSettings(presetConfig);
+    Check(File.ReadAllText(presetConfig) == presetText, "repeated startup does not rewrite an unchanged config");
+    var tjaRoot = Path.Combine(temporary, "tja-hashing");
+    System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+    var text = "TITLE:テスト\nBPM:120\nWAVE:song.ogg\nCOURSE:Oni\nLEVEL:1\n#START\n1000,\n#END\n";
+    var encodings = new[] { System.Text.Encoding.UTF8, System.Text.Encoding.GetEncoding(932) };
+    var expectedFingerprints = new HashSet<string>(StringComparer.Ordinal);
+    for (int i = 0; i < encodings.Length; i++)
+    {
+        var dir = Path.Combine(tjaRoot, i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Directory.CreateDirectory(dir);
+        var bytes = encodings[i].GetBytes(text);
+        File.WriteAllBytes(Path.Combine(dir, "song.tja"), bytes);
+        File.WriteAllBytes(Path.Combine(dir, "song.ogg"), [1, 2, 3]);
+        expectedFingerprints.Add(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)));
+    }
+    int digestCalls = 0;
+    Sha256Hash.SetProvider(bytes =>
+    {
+        Interlocked.Increment(ref digestCalls);
+        return SharpProspero.Security.Sha256.Hash(bytes);
+    });
+    try
+    {
+        var tja = new Waddamburo.Providers.Tja.TjaCatalogProvider(tjaRoot);
+        var snapshot = await tja.ScanAsync(null, default);
+        Check(snapshot.Songs.Count() == 2, "console SHA provider scans UTF-8 and Shift-JIS TJA libraries");
+        var descriptors = snapshot.Songs.SelectMany(song => song.Charts).ToArray();
+        Check(descriptors.All(chart => expectedFingerprints.Contains(chart.ChartAsset.StableId.Split(':')[2])),
+            "TJA file fingerprints match desktop SHA-256 byte for byte");
+        var loaded = new List<PlayableChart>();
+        foreach (var chart in descriptors) loaded.Add(await tja.LoadChartAsync(chart.Key, chart.ChartAsset));
+        Check(loaded.Count == 2 && loaded.All(chart => chart.NoteCount == 1), "console SHA provider reloads both TJA chart encodings");
+        Check(digestCalls >= 4, "TJA discovery and chart reload both use the registered SHA provider");
+        foreach (var file in Directory.EnumerateFiles(tjaRoot, "*.tja", SearchOption.AllDirectories))
+            File.AppendAllText(file, "\n// changed after scan\n");
+        bool changed = false;
+        try { await tja.LoadChartAsync(descriptors[0].Key, descriptors[0].ChartAsset); }
+        catch (InvalidDataException) { changed = true; }
+        Check(changed, "TJA fingerprint validation still rejects a chart changed after discovery");
+    }
+    finally { Sha256Hash.SetProvider(static bytes => System.Security.Cryptography.SHA256.HashData(bytes)); }
     var shaderRoot = Path.Combine(temporary, "shaders");
     var shaderCache = new Waddamburo.Platform.Prospero.Native.ShaderDiskCache(shaderRoot);
     byte[] shaderBytes = [4, 8, 15, 16, 23, 42];

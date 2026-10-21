@@ -35,6 +35,50 @@ crashdumps/
 .env.*
 !.env.example
 
+# Test reports and coverage output (keep test source and dependency lockfiles)
+TestResults/
+coverage/
+htmlcov/
+*.trx
+*.coverage
+*.coveragexml
+coverage.cobertura.xml
+coverage.opencover.xml
+lcov.info
+*.gcda
+*.gcno
+*.profraw
+*.profdata
+
+# Local diagnostic output
+*.log
+*.dmp
+*.stackdump
+
+# Python tooling caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Standalone native test builds outside bin/obj/out
+/tests/**/build/
+/tests/**/*.o
+/tests/**/*.obj
+/tests/**/*.a
+/tests/**/*.so
+/tests/**/*.so.*
+/tests/**/*.dll
+/tests/**/*.exe
+/tests/**/*.elf
+/tests/**/*.map
+
+# Alternate build/package output roots
+/artifacts/
+/build/
+/dist/
+
 # Synthetic fixtures are reviewed exceptions
 !tests/fixtures/synthetic/**
 AGENTS.md

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using Waddamburo.Catalog;
 
@@ -75,7 +74,7 @@ public sealed class TjaCatalogProvider : ISongCatalogProvider, ICatalogAssetReso
 
                 inspected.Add(new InspectedTjaFile(
                     relativePath,
-                    Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
+                    Convert.ToHexString(Sha256Hash.Compute(bytes)).ToLowerInvariant(),
                     metadata,
                     resolveAudio(metadata.Get("WAVE"), path, relativePath, diagnostics),
                     categoryFor(relativePath, metadata.Get("GENRE"))));
@@ -209,7 +208,7 @@ public sealed class TjaCatalogProvider : ISongCatalogProvider, ICatalogAssetReso
         if (file.Length > _options.MaximumChartBytes)
             throw new InvalidDataException("The selected TJA chart exceeds the configured chart-size limit.");
         var bytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
-        var currentHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        var currentHash = Convert.ToHexString(Sha256Hash.Compute(bytes)).ToLowerInvariant();
         if (!string.Equals(currentHash, locator.SourceHash, StringComparison.Ordinal))
             throw new InvalidDataException("The selected TJA chart changed after the catalog snapshot was published; rescan the library.");
         return TjaPlayableChartReader.Read(
@@ -377,13 +376,13 @@ public sealed class TjaCatalogProvider : ISongCatalogProvider, ICatalogAssetReso
     private string stableCategoryId(string category)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes($"{Id.Value}\0{category}");
-        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        return Convert.ToHexString(Sha256Hash.Compute(bytes)).ToLowerInvariant();
     }
 
     private string stableSongId(string groupKey)
     {
         var bytes = Encoding.UTF8.GetBytes($"{Id.Value}\0{groupKey}");
-        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        return Convert.ToHexString(Sha256Hash.Compute(bytes)).ToLowerInvariant();
     }
 
     private static string? firstMetadata(IEnumerable<InspectedTjaFile> files, string name) =>

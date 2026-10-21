@@ -43,7 +43,7 @@ The native dependency pipeline can download and build:
 | Component | Version and source | License | Link/use mode and obligations |
 | --- | --- | --- | --- |
 | FFmpeg | 8.1.2; <https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz>; SHA-256 `464beb5e7bf0c311e68b45ae2f04e9cc2af88851abb4082231742a74d97b524c` | LGPL-2.1-or-later for the reviewed configuration | Dynamically linked in developer presets; statically linked into `waddamburo_media` in release packages (`eng/package.sh`). GPL, nonfree, version-3-only, network, external libraries, programs, devices, and filters are disabled. Binary distributions must include the exact corresponding source, build configuration, copyright and LGPL notices, and permit relinking: the complete Waddamburo source and build recipe are public, so a user can rebuild `waddamburo_media` against a modified FFmpeg and replace it. |
-| vgmstream | Commit `09c9f40caae4747e44b6a993b3d5b654cef4d1f7`; <https://github.com/vgmstream/vgmstream/tree/09c9f40caae4747e44b6a993b3d5b654cef4d1f7>; source archive SHA-256 `7f012e143fe2945b2edae44bbfdfbad4671d5277c925d38d968a32659369383c` | ISC-style permissive license; copyright 2008-2025 Adam Gashlin, Fastelbja, Ronny Elfert, bnnm, Christopher Snowhill, NicknineTheEagle, bxaimc, Thealexbarney, CyberBotX, EdnessP, et al., with additional authors listed in upstream `COPYING` | Statically linked into `waddamburo_media` by the vgmstream backend and in release packages. The recipe disables G.719 and its optional FFmpeg, MPEG, Vorbis, ATRAC9, CELT, Speex, CLI, and player components; the exact upstream `COPYING` is staged beside the build. |
+| vgmstream | Commit `09c9f40caae4747e44b6a993b3d5b654cef4d1f7`; <https://github.com/vgmstream/vgmstream/tree/09c9f40caae4747e44b6a993b3d5b654cef4d1f7>; source archive SHA-256 `7f012e143fe2945b2edae44bbfdfbad4671d5277c925d38d968a32659369383c` | ISC-style permissive license; copyright 2008-2025 Adam Gashlin, Fastelbja, Ronny Elfert, bnnm, Christopher Snowhill, NicknineTheEagle, bxaimc, Thealexbarney, CyberBotX, EdnessP, et al., with additional authors listed in upstream `COPYING` | Statically linked into `waddamburo_media` by the vgmstream backend and in release packages. The desktop recipe disables G.719 (the PS5 v036 exception is listed below) and its optional FFmpeg, MPEG, Vorbis, ATRAC9, CELT, Speex, CLI, and player components; the exact upstream `COPYING` is staged beside the build. |
 | vgmstream-cli (user-supplied) | Any official release; <https://github.com/vgmstream/vgmstream/releases> | vgmstream's license plus that of its bundled codecs, including G.719 reference code with no identified redistribution grant | Not distributed, downloaded, or linked. When the user places it next to the executable, it is run as a separate program to decode files the bundled decoder rejects (Nijiiro G.719 audio). |
 | bgfx, bx, bimg | bgfx.cmake release v1.161.9510-579; <https://github.com/bkaradzic/bgfx.cmake/releases/tag/v1.161.9510-579>; source archive SHA-256 `2b489206be79d0841009c15853aa8717749373528a694933b926b797b4cfc992`; copyright 2010-2026 Branimir Karadzic | BSD-2-Clause | Built as the shared `bgfx` library (bx and bimg linked in) and loaded dynamically by the renderer; release packages ship it beside the executable. Linux builds enable the GLES 3.0 and Vulkan renderers only. The BSD-2 notice must accompany binaries; `LICENSE` is staged beside the build. |
 | FreeType | 2.14.2; <https://download.savannah.gnu.org/releases/freetype/freetype-2.14.2.tar.xz>; SHA-256 `4b62dcab4c920a1a860369933221814362e699e26f55792516d671e6ff55b5e1` (developer builds may use a system 2.13 or newer) | FreeType License (FTL) or GPL-2.0-or-later; used under the FTL | Statically linked into `waddamburo_text` in release packages, built without zlib, bzip2, PNG, Brotli, and HarfBuzz; dynamically linked to the system library in developer builds. The FTL requires crediting the FreeType Project in the documentation; `LICENSE.TXT` and `FTL.TXT` are staged beside the build. |
@@ -72,9 +72,9 @@ linked or packaged until this file records:
 
 License summaries are not substitutes for the license texts distributed with the
 exact dependency versions. Release packages must include those authoritative texts.
-Waddamburo never builds, downloads, or ships G.719 code. Running a user-supplied
-vgmstream-cli is the user's own use of that program, not a representation that it
-grants any particular patent, copyright, or redistribution rights.
+The desktop recipe does not build, download or ship G.719 code; PS5 v036 opts
+into the separate dependency described below. Running a user-supplied
+vgmstream-cli does not imply any patent, copyright or redistribution grant.
 
 ## PS5 homebrew target
 
@@ -88,3 +88,22 @@ into the ignored `.deps/prospero` tree rather than vendored in this repository.
 The PS5 native libraries, including FFmpeg and bgfx, are linked statically;
 retain the applicable notices and corresponding-source/relinking materials
 when distributing console binaries. The PS5 backend does not ship SDL.
+
+### PS5 v036 additions
+
+- Realm .NET 20.1.0 native wrapper, release commit
+  `a4133ff59429949d30c6a7d184768c699bda5655`, and Realm Core
+  `3aba889bd9c93c91ea7906b9ec4b60a5c5dcab45`: Apache-2.0 with bundled dependency
+  notices. The native sources are fetched recursively by the pinned build recipe;
+  retain upstream `LICENSE` and dependency notices with binary distributions.
+- `kode54/libg719_decode` at `da90ad8a676876c6c47889bcea6a753f9bbf7a73`, selected
+  by the pinned vgmstream recipe. Its ITU reference files retain the copyright
+  notice “2008 Ericsson AB. and Polycom Inc. All rights reserved.” No separate
+  redistribution grant was identified in that checkout; the Waddamburo MIT license
+  does not relicense those files. The console build now opts into this dependency;
+  the desktop default continues to omit it.
+- Mozilla root certificates extracted by curl, 2026-10-20, MPL-2.0. The embedded
+  bundle, provenance/hash and MPL text are in `native/prospero/certs/`.
+- PS5 HTTP, TLS, socket and entropy interfaces use the pinned SharpProspero public
+  bindings and console system services; no OpenSSL library is added to perform
+  console network TLS. No system firmware modules are redistributed by this change.

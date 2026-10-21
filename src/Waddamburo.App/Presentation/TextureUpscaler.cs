@@ -112,7 +112,15 @@ internal sealed class TextureUpscaler : IDisposable
                 {
                     var key = UpscaleTool.Key(job.Source);
                     if (!_tool.IsCached(key))
-                        _tool.Upscale(job.Source, Math.Max(1, threads()), () => _paused && !_stop.IsCancellationRequested);
+                        _tool.Upscale(job.Source, Math.Max(1, threads()), () =>
+                        {
+                            _stop.Token.ThrowIfCancellationRequested();
+                            // Yield the model to gameplay/baking rather than holding large
+                            // planes indefinitely while another inference waits on its lock.
+                            if (AppContext.TryGetSwitch("Waddamburo.Prospero", out var console) && console && _paused)
+                                throw new OperationCanceledException();
+                            return _paused;
+                        });
                     if (_tool.Load(key) is { } upscaled)
                         _done.Enqueue(new Result(job.Texture, upscaled));
                 });
@@ -149,8 +157,8 @@ internal sealed class TextureUpscaler : IDisposable
     public void Dispose()
     {
         _stop.Cancel();
-        _loader.Join(TimeSpan.FromSeconds(2));
-        _upscaler.Join(TimeSpan.FromSeconds(2));
+        _loader.Join();
+        _upscaler.Join();
         _tool.Dispose();
     }
 }

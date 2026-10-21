@@ -102,6 +102,8 @@ typedef struct waddamburo_media_io_callbacks {
 
 WADDAMBURO_MEDIA_API uint32_t WADDAMBURO_MEDIA_CALL waddamburo_media_get_abi_version(void);
 
+WADDAMBURO_MEDIA_API uint32_t WADDAMBURO_MEDIA_CALL waddamburo_media_has_g719(void);
+
 WADDAMBURO_MEDIA_API waddamburo_media_result WADDAMBURO_MEDIA_CALL
 waddamburo_media_negotiate_abi(uint32_t requested_version, uint32_t *negotiated_version);
 

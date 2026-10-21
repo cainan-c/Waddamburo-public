@@ -92,7 +92,8 @@ internal sealed class HomeMenu(Func<ArcadeSettings> get, Action<ArcadeSettings> 
 
 
     // Background upscaling may take all threads but one (the game needs its own).
-    private static readonly int UpscaleThreadsMaximum = Math.Max(1, Environment.ProcessorCount - 1);
+    private static readonly int UpscaleThreadsMaximum = AppContext.TryGetSwitch("Waddamburo.Prospero", out var consoleUpscale) && consoleUpscale
+        ? 2 : Math.Max(1, Environment.ProcessorCount - 1);
 
     /// <summary>The display's exclusive fullscreen modes, largest first (set once by the host).</summary>
     // ponytail: read once at start; a different monitor plugged in later needs a restart.
@@ -650,7 +651,7 @@ internal sealed class HomeMenu(Func<ArcadeSettings> get, Action<ArcadeSettings> 
     private string? nijiiroProblem(string path)
     {
         if (!_nijiiroProblems.TryGetValue(path, out var problem))
-            _nijiiroProblems[path] = problem = new NijiiroCatalogProvider(path) is var installation && !installation.Exists
+            _nijiiroProblems[path] = problem = new NijiiroCatalogProvider(path, datatableKey: get().NijiiroDatatableKey, fumenKey: get().NijiiroFumenKey) is var installation && !installation.Exists
                 ? T("library.no_nijiiro") : installation.Problem;
         return problem ?? SongLibraries.VgmstreamProblem;
     }

@@ -20,7 +20,7 @@ internal static class ChartExport
         ISongCatalogProvider[] providers =
         [
             .. StockCatalogProvider.IsStockData(dataRoot) ? [new StockCatalogProvider(dataRoot)] : Array.Empty<ISongCatalogProvider>(),
-            .. arcade.NijiiroFolder is { } nijiiro && new NijiiroCatalogProvider(nijiiro) is var installed && installed.Problem is null
+            .. arcade.NijiiroFolder is { } nijiiro && new NijiiroCatalogProvider(nijiiro, datatableKey: arcade.NijiiroDatatableKey, fumenKey: arcade.NijiiroFumenKey) is var installed && installed.Problem is null
                 ? [installed] : Array.Empty<ISongCatalogProvider>(),
         ];
         using var catalog = new GlobalSongCatalog(providers);

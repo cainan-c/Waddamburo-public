@@ -43,7 +43,14 @@ public sealed class NijiiroCatalogProviderTests
 
             // Usable with the loader's key; without the loader nothing decrypts, and it says so.
             Assert.Null(provider.Problem);
+            File.WriteAllBytes(Path.Combine(install, "Executable", "Release", "bnusio.dll"), "MZ_no_keys"u8.ToArray());
+            Assert.Contains("read (10 bytes)", new NijiiroCatalogProvider(install).Problem);
+            Assert.Contains("no supported", new NijiiroCatalogProvider(install).Problem);
+            File.WriteAllBytes(Path.Combine(install, "Executable", "Release", "bnusio.dll"),
+                Encoding.ASCII.GetBytes(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))));
+            Assert.Contains("1 candidate AES keys found, but none decrypt", new NijiiroCatalogProvider(install).Problem);
             File.Delete(Path.Combine(install, "Executable", "Release", "bnusio.dll"));
+            Assert.Contains("Cannot read bnusio.dll", new NijiiroCatalogProvider(install).Problem);
             Assert.Contains("bnusio.dll", new NijiiroCatalogProvider(install).Problem);
             Assert.Equal("No Nijiiro data there.", new NijiiroCatalogProvider(Path.Combine(install, "nothing")).Problem);
         }

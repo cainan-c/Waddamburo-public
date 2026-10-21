@@ -14,5 +14,9 @@
   "PS5_Vulkan": {
     "url": "https://github.com/mihawk-99/PS5_Vulkan.git",
     "revision": "f410e67a0241b3e8edcdbcd2a9b285dfc4a412ed"
+  },
+  "realm-dotnet": {
+    "url": "https://github.com/realm/realm-dotnet.git",
+    "revision": "a4133ff59429949d30c6a7d184768c699bda5655"
   }
 }

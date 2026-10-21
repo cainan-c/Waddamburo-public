@@ -27,11 +27,15 @@ public sealed partial class NijiiroCatalogProvider : ISongCatalogProvider, ICata
 
     private readonly string _root;
     private byte[][]? _keys;
+    private readonly byte[]? _datatableKey, _fumenKey;
     private Dictionary<string, int[]> _stars = [];
 
     /// <param name="folder">The installation, its <c>Data/x64</c>, or its <c>fumen</c> folder.</param>
     /// <param name="id">The provider id (default "nijiiro").</param>
-    public NijiiroCatalogProvider(string folder, CatalogProviderId? id = null)
+    /// <param name="datatableKey">An optional configured table key; takes priority over the loader.</param>
+    /// <param name="fumenKey">An optional configured chart key; takes priority over the loader.</param>
+    public NijiiroCatalogProvider(string folder, CatalogProviderId? id = null,
+        NijiiroDecryptionKey? datatableKey = null, NijiiroDecryptionKey? fumenKey = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
@@ -43,6 +47,8 @@ public sealed partial class NijiiroCatalogProvider : ISongCatalogProvider, ICata
             root = Path.Combine(root, "x64");
         _root = root;
         Id = id ?? new CatalogProviderId("nijiiro");
+        _datatableKey = datatableKey?.ToArray();
+        _fumenKey = fumenKey?.ToArray();
     }
 
     public CatalogProviderId Id { get; }
@@ -204,8 +210,20 @@ public sealed partial class NijiiroCatalogProvider : ISongCatalogProvider, ICata
         var path = Path.Combine(_root, "datatable", name + ".json");
         if (!File.Exists(path))
             path = Path.ChangeExtension(path, ".bin");
-        using var document = JsonDocument.Parse(unpack(File.ReadAllBytes(path), table: true));
+        var bytes = File.ReadAllBytes(path);
+        LogRead(path, bytes);
+        using var document = JsonDocument.Parse(unpack(bytes, table: true));
         return [.. document.RootElement.GetProperty("items").EnumerateArray().Select(static item => item.Clone())];
+    }
+
+    public delegate byte[] AssetDecryptor(ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv, ReadOnlySpan<byte> ciphertext);
+    public static AssetDecryptor? PlatformDecryptor { get; set; }
+
+    private static byte[] DesktopDecrypt(ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv, ReadOnlySpan<byte> ciphertext)
+    {
+        using var aes = Aes.Create();
+        aes.Key = key.ToArray();
+        return aes.DecryptCbc(ciphertext, iv, PaddingMode.PKCS7);
     }
 
     private byte[] unpack(byte[] data, bool table)
@@ -216,14 +234,14 @@ public sealed partial class NijiiroCatalogProvider : ISongCatalogProvider, ICata
             return data;
         if (data.Length < 32 || data.Length % 16 != 0)
             throw new InvalidDataException("The Nijiiro file is neither plain, gzip nor AES-encrypted.");
-        foreach (var key in _keys ??= loaderKeys())
+        var configured = table ? _datatableKey : _fumenKey;
+        byte[][] candidates = configured is null ? _keys ??= loaderKeys() : [configured];
+        foreach (var key in candidates)
         {
-            using var aes = Aes.Create();
-            aes.Key = key;
             byte[] plain;
             try
             {
-                plain = aes.DecryptCbc(data.AsSpan(16), data.AsSpan(0, 16), PaddingMode.PKCS7);
+                plain = (PlatformDecryptor ?? DesktopDecrypt)(key, data.AsSpan(0, 16), data.AsSpan(16));
             }
             catch (CryptographicException)
             {
@@ -234,17 +252,37 @@ public sealed partial class NijiiroCatalogProvider : ISongCatalogProvider, ICata
             if (plausible(plain, table))
                 return plain;
         }
-        throw new InvalidDataException("A Nijiiro file cannot be decrypted: the installation's Executable/Release/bnusio.dll is needed.");
+        if (configured is not null)
+            throw new InvalidDataException($"Configured {(table ? "nijiiro_datatable_key" : "nijiiro_fumen_key")} could not decrypt this Nijiiro file.");
+        throw new InvalidDataException($"bnusio.dll was read and {candidates.Length} candidate AES keys found, but none decrypt this Nijiiro file.");
     }
 
     // Key candidates: every 64-hex-digit literal in the installation's loader (never executed).
     private byte[][] loaderKeys()
     {
-        var loader = Path.Combine(_root, "..", "..", "Executable", "Release", "bnusio.dll");
-        if (!File.Exists(loader))
-            return [];
-        var text = Encoding.Latin1.GetString(File.ReadAllBytes(loader));
-        return [.. HexKey().Matches(text).Select(static match => match.Value).Distinct().Take(128).Select(Convert.FromHexString)];
+        var loader = Path.GetFullPath(Path.Combine(_root, "..", "..", "Executable", "Release", "bnusio.dll"));
+        byte[] bytes;
+        try { bytes = File.ReadAllBytes(loader); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"[Nijiiro] Cannot read loader '{loader}': {exception.GetType().Name}, HRESULT 0x{exception.HResult:x8}: {exception.Message}");
+            throw new IOException($"Cannot read bnusio.dll at '{loader}': {exception.Message}", exception);
+        }
+        LogRead(loader, bytes);
+        var text = Encoding.Latin1.GetString(bytes);
+        byte[][] keys = [.. HexKey().Matches(text).Select(static match => match.Value).Distinct().Take(128).Select(Convert.FromHexString)];
+        Console.Error.WriteLine($"[Nijiiro] Loader key candidates: {keys.Length}.");
+        if (keys.Length == 0)
+            throw new InvalidDataException($"bnusio.dll read ({bytes.Length} bytes), but no supported 64-hex AES keys found.");
+        return keys;
+    }
+
+    // A deterministic file fingerprint, not a crypto operation or a key dump.
+    private static void LogRead(string path, byte[] bytes)
+    {
+        ulong fingerprint = 14695981039346656037;
+        foreach (byte value in bytes) fingerprint = unchecked((fingerprint ^ value) * 1099511628211);
+        Console.Error.WriteLine($"[Nijiiro] Read '{path}': {bytes.Length} bytes; FNV1a64={fingerprint:x16}.");
     }
 
     private static bool isGzip(byte[] data) => data.Length > 2 && data[0] == 0x1f && data[1] == 0x8b;

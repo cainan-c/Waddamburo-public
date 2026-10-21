@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using Waddamburo.App.Presentation;
 using Waddamburo.Game.Scores;
@@ -34,7 +33,7 @@ internal sealed class CabinetPairing : IDisposable
 
     /// <summary>8 hex digits, stable per machine (the server keys sessions and rate limits by it).</summary>
     public static string CabinetId { get; } =
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Environment.MachineName)))[..8];
+        Convert.ToHexStringLower(Waddamburo.Catalog.Sha256Hash.Compute(Encoding.UTF8.GetBytes(Environment.MachineName)))[..8];
 
     /// <summary>Set by the game every tick: the attract loop is running, a card may arrive.</summary>
     public bool Accepting

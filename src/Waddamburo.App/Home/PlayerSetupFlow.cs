@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using System.Text;
 using Waddamburo.Game.Scores;
 using Waddamburo.Platform.Sdl;
@@ -400,9 +399,16 @@ internal sealed class PlayerSetupFlow : IDisposable
                     }
                 }
             }
-            catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+            catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException
+                or IOException or System.Text.Json.JsonException)
             {
+                Console.Error.WriteLine($"Warning LOGIN: {exception.GetType().Name}: {exception.Message}");
                 post(() => finishWork(work, index, Strings.T("setup.login_failed", exception.Message)));
+            }
+            catch (OperationCanceledException) when (!work.IsCancellationRequested)
+            {
+                Console.Error.WriteLine("Warning LOGIN: the server request timed out.");
+                post(() => finishWork(work, index, Strings.T("setup.login_failed", "The server request timed out. Try again.")));
             }
             catch (OperationCanceledException)
             {
@@ -465,6 +471,11 @@ internal sealed class PlayerSetupFlow : IDisposable
             {
                 post(() => finishWork(work, index, Strings.T("setup.pairing_failed", exception.Message)));
             }
+            catch (OperationCanceledException) when (!work.IsCancellationRequested)
+            {
+                Console.Error.WriteLine("Warning PAIRING: the server request timed out.");
+                post(() => finishWork(work, index, Strings.T("setup.pairing_failed", "The server request timed out. Try again.")));
+            }
             catch (OperationCanceledException)
             {
             }
@@ -477,7 +488,7 @@ internal sealed class PlayerSetupFlow : IDisposable
         if (_anonymous is null || _avatars.ContainsKey(url))
             return;
         _avatars[url] = null;
-        var file = Path.Combine(_avatarDirectory, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(url)))[..16] + ".png");
+        var file = Path.Combine(_avatarDirectory, Convert.ToHexStringLower(Waddamburo.Catalog.Sha256Hash.Compute(Encoding.UTF8.GetBytes(url)))[..16] + ".png");
         _ = Task.Run(async () =>
         {
             try

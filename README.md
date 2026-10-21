@@ -49,7 +49,10 @@ Setup downloads the pinned open-source toolchains and installs **.NET SDK
 for your PS5 homebrew FPKG packaging workflow after adding your own assets.
 Copy the **contents of `USRDIR/data`** into `module/Data`, beside `eboot.bin`.
 Configuration, scores and caches are saved separately on the console SSD in
-`/data/Waddamburo`.
+`/data/Waddamburo`. Extra libraries are preset to `/data/Waddamburo/tja`, `/data/Waddamburo/nijiiro`
+and `/data/Waddamburo/osu` and created on startup. v036 adds native G.719 decoding, the
+osu!lazer Realm backend, and PS5 HTTP/TLS/WebSocket transports; these new features
+still need console testing.
 
 The console settings offer **60 or 120 FPS** with VSync enabled. Selecting 120 FPS
 requests 120 Hz output when supported by the display. See the

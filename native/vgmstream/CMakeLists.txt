@@ -1,8 +1,8 @@
 include(ExternalProject)
 
-# vgmstream decodes the game's nuSound2 banks (SE cues are subsongs). G.719 is never
-# built: its reference code has no redistribution license. Files that need it are
-# decoded by a user-supplied vgmstream-cli instead (see native/media/README.md).
+# vgmstream decodes nuSound2 banks; the PS5 target enables its pinned G.719
+# dependency in-process, since a desktop CLI cannot run on the console.
+option(WADDAMBURO_MEDIA_G719 "Include the optional native G.719 decoder" ${WADDAMBURO_PROSPERO})
 set(WADDAMBURO_VGMSTREAM_REVISION "09c9f40caae4747e44b6a993b3d5b654cef4d1f7")
 set(WADDAMBURO_VGMSTREAM_URL
   "https://github.com/vgmstream/vgmstream/archive/${WADDAMBURO_VGMSTREAM_REVISION}.tar.gz")
@@ -39,11 +39,13 @@ ExternalProject_Add(waddamburo_vgmstream_build
     -DUSE_MPEG=OFF
     -DUSE_VORBIS=OFF
     -DUSE_G7221=ON
-    -DUSE_G719=OFF
+    -DUSE_G719=${WADDAMBURO_MEDIA_G719}
     -DUSE_ATRAC9=OFF
     -DUSE_CELT=OFF
     -DUSE_SPEEX=OFF
   BUILD_COMMAND "${CMAKE_COMMAND}" --build <BINARY_DIR> --config Release --target libvgmstream
+    COMMAND "${CMAKE_COMMAND}" -DG719_ENABLED=${WADDAMBURO_MEDIA_G719}
+      -DG719_BUILD_DIR=${_vgmstream_build} -P "${CMAKE_CURRENT_LIST_DIR}/build-g719.cmake"
   INSTALL_COMMAND "${CMAKE_COMMAND}" -E make_directory "${_vgmstream_root}/licenses/vgmstream"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
     <SOURCE_DIR>/COPYING "${_vgmstream_root}/licenses/vgmstream/COPYING"

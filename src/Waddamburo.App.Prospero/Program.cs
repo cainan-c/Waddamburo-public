@@ -34,6 +34,9 @@ internal static partial class Program
     [LibraryImport("waddamburo_ps5", EntryPoint = "waddamburo_runtime_memory_report")]
     private static partial void ReportRuntimeMemory();
 
+    [LibraryImport("waddamburo_media", EntryPoint = "waddamburo_media_has_g719")]
+    private static partial uint HasG719();
+
     private static void Main()
     {
         // Set writers before the Console getters try to open Linux standard handles.
@@ -42,12 +45,20 @@ internal static partial class Program
         Console.SetOut(log);
         Console.SetError(log);
         InitializePlatform("Waddamburo");
+        AppContext.SetSwitch("Waddamburo.Prospero.G719", HasG719() != 0);
+        Waddamburo.Game.Online.RealtimeConnection.PlatformConnectFactory = Waddamburo.Platform.Prospero.Native.ProsperoWebSocket.ConnectAsync;
+        Waddamburo.Game.Scores.ScoreClient.PlatformHandlerFactory = static insecure => new Waddamburo.Platform.Prospero.Native.ProsperoHttpMessageHandler(insecure);
+        Waddamburo.Providers.Stock.NijiiroCatalogProvider.PlatformDecryptor = Waddamburo.Platform.Prospero.Native.ProsperoAes256.DecryptCbc;
         ChartHash.SetSha256Provider(static bytes => SharpProspero.Security.Sha256.Hash(bytes));
         try
         {
             ReportRuntimeMemory();
             ProsperoThreadPool.Initialize();
-            Log($"PS5 worker pool ready: {ProsperoThreadPool.Workers} warmed workers, growth capped; build v033.");
+            Log($"PS5 worker pool ready: {ProsperoThreadPool.Workers} warmed workers, growth capped; build v047.");
+            Log($"CPU SIMD profile: float lanes={System.Numerics.Vector<float>.Count}, AVX2={System.Runtime.Intrinsics.X86.Avx2.IsSupported}, FMA={System.Runtime.Intrinsics.X86.Fma.IsSupported}.");
+            var songFolders = ProsperoSongFolders.Console;
+            songFolders.EnsureCreated();
+            Log($"Song library folders ready: {songFolders.Tja}, {songFolders.Nijiiro}, {songFolders.Osu}.");
             // PS5 denies chdir for this application. Every console path is absolute.
             Log("Resolving arcade assets under /app0/Data");
             var assets = ProsperoAssetLayout.Resolve(ProsperoAssetLayout.ConsoleApplicationRoot);
@@ -58,15 +69,13 @@ internal static partial class Program
                 throw new InvalidOperationException($"PS5 GC memory self-test failed at stage {memoryCheck}.");
             Log("PS5 GC memory self-test passed: partial-page zeroing, neighboring data and mixed-page commit.");
             var config = Path.Combine(assets.Home, ArcadeSettings.FileName);
-            ArcadeSettings Settings() => ProsperoDisplay.Normalize(ArcadeSettings.LoadOrCreate(config)) with
+            ArcadeSettings Settings() => ProsperoDisplay.Normalize(songFolders.LoadSettings(config)) with
             {
                 AutoUpdate = false,
                 Fullscreen = true,
                 Renderer = "vulkan",
                 CacheFolder = Path.Combine(assets.Home, "cache"),
-                // The first native build boots offline. Network/TLS needs separate console validation.
-                Server = null,
-                UpscaleThreads = 0,
+                UpscaleThreads = Math.Clamp(songFolders.LoadSettings(config).UpscaleThreads, 0, 2),
             };
             Environment.SetEnvironmentVariable("WADDAMBURO_RENDERER", "vulkan");
             VgmstreamCli.GameFolder = ProsperoAssetLayout.ConsoleApplicationRoot;
@@ -75,6 +84,9 @@ internal static partial class Program
             {
                 Log("Loading settings and accounts");
                 var settings = Settings();
+                Log(settings.Server is { } server
+                    ? $"Online server: {server.GetLeftPart(UriPartial.Authority)}; home mode={settings.Home}."
+                    : "Online server disabled by config (server is empty).");
                 var controlsMarker = Path.Combine(assets.Home, "controller-layout-v2.txt");
                 if (!File.Exists(controlsMarker))
                 {
@@ -88,7 +100,7 @@ internal static partial class Program
                 Log("Starting game shell");
                 GameShell.Run(new GameOptions(
                     assets.Lumen, assets.Don, 1920, 1080, null, null, null,
-                    SdlKeyboardTimeline.Empty, assets.CustomSongs, assets.Font, null, assets.Sound,
+                    SdlKeyboardTimeline.Empty, songFolders.Tja, assets.Font, null, assets.Sound,
                     Arcade: settings, ArcadePath: config, Accounts: accounts,
                     ScoresPath: Path.Combine(assets.Home, ScoreStore.FileName), Fullscreen: true));
             } while (GameShell.RestartRequested);

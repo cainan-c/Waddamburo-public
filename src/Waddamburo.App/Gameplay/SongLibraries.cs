@@ -38,7 +38,7 @@ internal sealed class SongLibraries : IDisposable
             .. (arcade.Home || Environment.GetEnvironmentVariable("WADDAMBURO_CUSTOM_TJA") == "1") && Directory.Exists(tja)
                 ? [new TjaCatalogProvider(tja)] : Array.Empty<ISongCatalogProvider>(),
             // A Nijiiro installation picked in the settings (home mode), left out when it cannot play.
-            .. arcade.Home && arcade.NijiiroFolder is { } nijiiro && new NijiiroCatalogProvider(nijiiro) is var installed
+            .. arcade.Home && arcade.NijiiroFolder is { } nijiiro && new NijiiroCatalogProvider(nijiiro, datatableKey: arcade.NijiiroDatatableKey, fumenKey: arcade.NijiiroFumenKey) is var installed
                 && usable(installed) ? [installed] : Array.Empty<ISongCatalogProvider>(),
             // osu!lazer's native taiko beatmaps (home mode): the folder set in the settings, else the default install.
             .. arcade.Home && OsuLazerCatalogProvider.FindDataFolder(arcade.OsuFolder) is { } osu
@@ -68,7 +68,8 @@ internal sealed class SongLibraries : IDisposable
     public static string? NijiiroProblem(NijiiroCatalogProvider installation) => installation.Problem ?? VgmstreamProblem;
 
     /// <summary>Null when vgmstream-cli is found, else what to do about it.</summary>
-    public static string? VgmstreamProblem => VgmstreamCli.IsInstalled ? null
+    public static string? VgmstreamProblem => (AppContext.TryGetSwitch("Waddamburo.Prospero.G719", out var nativeG719)
+        && nativeG719) || VgmstreamCli.IsInstalled ? null
         : Strings.T("library.no_vgmstream");
 
     private static bool usable(NijiiroCatalogProvider installation)
